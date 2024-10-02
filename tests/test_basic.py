@@ -8,15 +8,6 @@ def test_initialization():
     optimizer = sw.StepwiseHyperoptOptimizer(model, rounds)
     assert optimizer is not None
 
-def test_that_fails():
-    rounds = None
-    name = 'suzzie'
-    ages = [10, 20, 30]
-    assert 'matt' == 'fred'
-
-
-def test_with_exception(one):
-    assert one == 1
 
 @pytest.mark.xfail(raises=TypeError)
 def test_logistic():
