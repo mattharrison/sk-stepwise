@@ -1,0 +1,36 @@
+[project]
+name = "sk-stepwise"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "disutils>=1.4.32.post2",
+    "hyperopt>=0.2.7",
+    "numpy>=2.1.1",
+    "pandas>=2.2.2",
+    "scikit-learn>=1.5.2",
+    "setuptools>=75.1.0",
+    "xgboost>=2.1.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "mypy>=1.11.2",
+    "pandas-stubs>=2.2.2.240909",
+    "pyre-check>=0.9.22",
+    "pytest>=8.3.3",
+]
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = 'tests.*'
+ignore_errors = true
+

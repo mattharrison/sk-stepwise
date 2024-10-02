@@ -1,0 +1,17 @@
+# Byte-compiled files
+*.pyc
+__pycache__/
+
+# Virtual environment directory
+venv/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+.pyre/
