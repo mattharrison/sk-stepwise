@@ -20,6 +20,7 @@ from typing import Protocol
 from collections.abc import Callable
 from hyperopt.pyll.base import SymbolTable
 
+from dataclasses import dataclass, field
 
 PARAM = int | float | str | bool
 MatrixLike: TypeAlias = np.ndarray | pd.DataFrame | spmatrix
@@ -37,26 +38,16 @@ class _Fitable(Protocol):
     def score(self, X: MatrixLike, y: ArrayLike) -> float: ...
 
 
+@dataclass
 class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
-    def __init__(
-        self,
-        model: _Fitable,
-        param_space_sequence: list[dict[str, PARAM | SymbolTable]],
-        max_evals_per_step: int = 100,
-        cv: int = 5,
-        scoring: str
-        | Callable[[ArrayLike, ArrayLike], float] = "neg_mean_squared_error",
-        random_state: int = 42,
-    ) -> None:
-        self.model = model
-
-        self.param_space_sequence = param_space_sequence
-        self.max_evals_per_step = max_evals_per_step
-        self.cv = cv
-        self.scoring = scoring
-        self.random_state = random_state
-        self.best_params_: dict[str, PARAM] = {}
-        self.best_score_ = None
+    model: _Fitable
+    param_space_sequence: list[dict[str, PARAM | SymbolTable]]
+    max_evals_per_step: int = 100
+    cv: int = 5
+    scoring: str | Callable[[ArrayLike, ArrayLike], float] = "neg_mean_squared_error"
+    random_state: int = 42
+    best_params_: dict[str, PARAM] = field(default_factory=dict)
+    best_score_: float = None
 
     def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
         int_vals = ["max_depth", "reg_alpha"]
