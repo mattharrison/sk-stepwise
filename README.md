@@ -19,6 +19,25 @@ This class enables you to optimize a model's hyperparameters in a sequential man
 pip install sk-stepwise
 ```
 
+If you are planning on developing this package, you should install
+the precommit hooks and other development dependencies.
+
+```sh
+pip install -r requirements-dev.txt
+```
+
+You should also install the package in editable mode:
+
+```sh
+uv pip install -e .
+```
+
+Run the tests with:
+
+```sh
+uv run pytest
+```
+
 ## Usage
 
 Here's an example of how to use `StepwiseHyperoptOptimizer` to optimize a scikit-learn model:
