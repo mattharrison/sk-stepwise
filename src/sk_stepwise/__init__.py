@@ -28,7 +28,7 @@ ArrayLike: TypeAlias = numpy.typing.ArrayLike
 
 
 class _Fitable(Protocol):
-    def fit(self, X: MatrixLike, y: ArrayLike) -> Self: ...
+    def fit(self, X: MatrixLike, y: ArrayLike, *args, **kwargs) -> Self: ...
     def predict(self, X: MatrixLike) -> ArrayLike: ...
     # def set_params(self, **params: dict[str, PARAM]) -> Self:
     # def set_params(self, **params: Unpack[dict[str, PARAM]]) -> Self:
@@ -64,7 +64,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         )
         return -np.mean(score)
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> Self:
+    def fit(self, X: pd.DataFrame, y: pd.Series, *args, **kwargs) -> Self:
         self.X = X
         self.y = y
         for step, param_space in enumerate(self.param_space_sequence):
@@ -92,7 +92,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
 
         # Fit the model with the best parameters
         self.model.set_params(**self.best_params_)
-        self.model.fit(X, y)
+        self.model.fit(X, y, *args, **kwargs)
 
         return self
 
