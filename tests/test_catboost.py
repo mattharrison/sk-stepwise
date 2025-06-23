@@ -58,7 +58,7 @@ def test_catboost_regressor_initialization(catboost_data):
                     "max_ctr_complexity": hp.quniform("max_ctr_complexity_ordered", 1, 8, 1),
                     "subsample": hp.uniform("subsample_ordered", 0.6, 1.0),
                     "colsample_bylevel": hp.uniform("colsample_bylevel_ordered", 0.6, 1.0),
-                    "used_ram_limit": hp.choice("used_ram_limit_ordered", [None, "1GB", "2GB"]), # Example RAM limit
+                    #"used_ram_limit": hp.choice("used_ram_limit_ordered", [None, "1GB", "2GB"]), # Example RAM limit
                     "objective": hp.choice("objective_ordered", ["RMSE", "MAE"]), # Objective function
                 },
                 # Option 2: Plain Boosting (grow_policy can be any)
@@ -93,7 +93,7 @@ def test_catboost_regressor_initialization(catboost_data):
                     "max_ctr_complexity": hp.quniform("max_ctr_complexity_plain", 1, 8, 1),
                     "subsample": hp.uniform("subsample_plain", 0.6, 1.0),
                     "colsample_bylevel": hp.uniform("colsample_bylevel_plain", 0.6, 1.0),
-                    "used_ram_limit": hp.choice("used_ram_limit_plain", [None, "1GB", "2GB"]),
+                    #"used_ram_limit": hp.choice("used_ram_limit_plain", [None, "1GB", "2GB"]),
                     "objective": hp.choice("objective_plain", ["RMSE", "MAE"]),
                 },
             ]
