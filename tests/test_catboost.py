@@ -20,98 +20,140 @@ def test_catboost_regressor_initialization(catboost_data):
 
     model = CatBoostRegressor(random_state=42, silent=True)
 
-    # Define boosting_type as a variable to use in conditional grow_policy
-    # Based on the provided tuning table, boosting_type is tuned.
-    boosting_type_choice = hp.choice("boosting_type", ["Ordered", "Plain"])
-
-    # Define grow_policy conditionally based on boosting_type
-    # If boosting_type is "Ordered", grow_policy must be "SymmetricTree".
-    # Otherwise, it can be any of the three.
-    grow_policy_choice = hp.choice(
-        "grow_policy",
-        [
-            "SymmetricTree",
-            hp.pchoice(("Depthwise", 0.0) if boosting_type_choice._obj == "Ordered" else ("Depthwise", 1.0)),
-            hp.pchoice(("Lossguide", 0.0) if boosting_type_choice._obj == "Ordered" else ("Lossguide", 1.0))
-        ]
-    )
-
     # Define param_space_sequence based on the "Which Parameters to tune?" table
     # and the provided default/example values.
+    # Correctly define conditional grow_policy based on boosting_type
     param_space_sequence = [
-        {
-            # Tuned parameters
-            "iterations": hp.quniform("iterations", 10, 200, 10), # Range from 10 to 200, step 10
-            "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)), # Common range for learning rate
-            "depth": hp.quniform("depth", 4, 10, 1), # Range from 4 to 10, step 1
-            "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)), # Common range for L2 regularization
-            "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)), # Common range for random strength
-            "one_hot_max_size": hp.quniform("one_hot_max_size", 2, 20, 1), # Range from 2 to 20, step 1
-            "min_data_in_leaf": hp.quniform("min_data_in_leaf", 1, 30, 1), # Range from 1 to 30, step 1
-            "boosting_type": boosting_type_choice, # Use the defined choice variable
-            "grow_policy": grow_policy_choice, # Use the defined conditional choice
-            "subsample": hp.uniform("subsample", 0.6, 1.0), # Range from 0.6 to 1.0
-            "bootstrap_type": hp.choice("bootstrap_type", ["Bayesian", "Bernoulli", "MVS"]), # Common bootstrap types
-            # "bagging_temperature" is often used with Bayesian bootstrap, so we'll include it conditionally or generally
-            # For simplicity, let's include it generally if bootstrap_type is chosen.
-            "bagging_temperature": hp.uniform("bagging_temperature", 0.0, 1.0), # Common range for bagging_temperature
+        hp.choice(
+            "catboost_params", # A single top-level choice for the entire parameter set
+            [
+                # Option 1: Ordered Boosting (grow_policy must be SymmetricTree)
+                {
+                    "boosting_type": "Ordered",
+                    "grow_policy": "SymmetricTree", # Forced to SymmetricTree for Ordered boosting
+                    # Tuned parameters
+                    "iterations": hp.quniform("iterations_ordered", 10, 200, 10),
+                    "learning_rate": hp.loguniform("learning_rate_ordered", np.log(0.01), np.log(0.3)),
+                    "depth": hp.quniform("depth_ordered", 4, 10, 1),
+                    "l2_leaf_reg": hp.loguniform("l2_leaf_reg_ordered", np.log(1), np.log(10)),
+                    "random_strength": hp.loguniform("random_strength_ordered", np.log(0.1), np.log(10)),
+                    "one_hot_max_size": hp.quniform("one_hot_max_size_ordered", 2, 20, 1),
+                    "min_data_in_leaf": hp.quniform("min_data_in_leaf_ordered", 1, 30, 1),
+                    "subsample": hp.uniform("subsample_ordered", 0.6, 1.0),
+                    "bootstrap_type": hp.choice("bootstrap_type_ordered", ["Bayesian", "Bernoulli", "MVS"]),
+                    "bagging_temperature": hp.uniform("bagging_temperature_ordered", 0.0, 1.0),
+                    "diffusion_temperature": hp.loguniform("diffusion_temperature_ordered", 0, 4),
+                    "allow_const_label": hp.choice("allow_const_label_ordered", [True, False]),
+                    "posterior_sampling": hp.choice("posterior_sampling_ordered", [hp.choice("langevin_inner_ordered", [True, False]), False]),
+                    "langevin": hp.choice("langevin_outer_ordered", [True, False]),
+                    "fold_len_multiplier": hp.uniform("fold_len_multiplier_ordered", 1.01, 2.0),
+                    "approx_on_full_history": hp.choice("approx_on_full_history_ordered", [True, False]),
 
-            # Fixed parameters (from the provided list, not marked for tuning)
-            "loss_function": "RMSE", # Changed from Logloss as it's a regressor
-            "eval_metric": "RMSE", # Changed from Logloss
-            "border_count": 254,
-            "max_ctr_complexity": 4,
-            "feature_border_type": 'GreedyLogSum',
-            "combinations_ctr": ['Borders:CtrBorderCount=15:CtrBorderType=Uniform:TargetBorderCount=1:TargetBorderType=MinEntropy:Prior=0/1:Prior=0.5/1:Prior=1/1', 'Counter:CtrBorderCount=15:CtrBorderType=Uniform:Prior=0/1'],
-            "ctr_leaf_count_limit": 18446744073709551615,
-            "ctr_target_border_count": 1,
-            "model_shrink_rate": 0,
-            "model_size_reg": 0.5,
-            "leaf_estimation_iterations": 10,
-            "leaf_estimation_method": 'Newton',
-            "leaf_estimation_backtracking": 'AnyImprovement',
-            "auto_class_weights": 'None',
-            "eval_fraction": 0,
-            "fold_permutation_block": 0,
-            "counter_calc_method": 'SkipTest',
-            "posterior_sampling": False,
-            "score_function": 'Cosine',
-            "sampling_frequency": 'PerTree',
-            "boost_from_average": False,
-            "best_model_min_trees": 1,
-            "random_seed": 0, # Using random_state in optimizer, so this can be fixed
-            "random_score_type": 'NormalWithModelSizeDecrease',
-            "penalties_coefficient": 1,
-            "task_type": 'CPU',
-            "use_best_model": False,
-            "nan_mode": 'Min',
-            "has_time": False, # Assuming no time feature in synthetic data
-            "diffusion_temperature": hp.loguniform("diffusion_temperature", 0, 4), # Still tuning this as it was in original test
-            "allow_const_label": hp.choice("allow_const_label", [True, False]), # Still tuning this as it was in original test
-            "posterior_sampling": hp.choice("posterior_sampling", [hp.choice("langevin_inner", [True, False]), False]), # Re-defining for clarity
-            "langevin": hp.choice("langevin_outer", [True, False]), # Re-defining for clarity
-            "fold_len_multiplier": hp.uniform("fold_len_multiplier", 1.01, 2.0), # Still tuning this
-            "approx_on_full_history": hp.choice("approx_on_full_history", [True, False]), # Still tuning this
-        }
+                    # Fixed parameters (from the provided list, not marked for tuning)
+                    "loss_function": "RMSE",
+                    "eval_metric": "RMSE",
+                    "border_count": 254,
+                    "max_ctr_complexity": 4,
+                    "feature_border_type": 'GreedyLogSum',
+                    "combinations_ctr": ['Borders:CtrBorderCount=15:CtrBorderType=Uniform:TargetBorderCount=1:TargetBorderType=MinEntropy:Prior=0/1:Prior=0.5/1:Prior=1/1', 'Counter:CtrBorderCount=15:CtrBorderType=Uniform:Prior=0/1'],
+                    "ctr_leaf_count_limit": 18446744073709551615,
+                    "ctr_target_border_count": 1,
+                    "model_shrink_rate": 0,
+                    "model_size_reg": 0.5,
+                    "leaf_estimation_iterations": 10,
+                    "leaf_estimation_method": 'Newton',
+                    "leaf_estimation_backtracking": 'AnyImprovement',
+                    "auto_class_weights": 'None',
+                    "eval_fraction": 0,
+                    "fold_permutation_block": 0,
+                    "counter_calc_method": 'SkipTest',
+                    "score_function": 'Cosine',
+                    "sampling_frequency": 'PerTree',
+                    "boost_from_average": False,
+                    "best_model_min_trees": 1,
+                    "random_seed": 0,
+                    "random_score_type": 'NormalWithModelSizeDecrease',
+                    "penalties_coefficient": 1,
+                    "task_type": 'CPU',
+                    "use_best_model": False,
+                    "nan_mode": 'Min',
+                    "has_time": False,
+                },
+                # Option 2: Plain Boosting (grow_policy can be any)
+                {
+                    "boosting_type": "Plain",
+                    "grow_policy": hp.choice("grow_policy_plain", ["SymmetricTree", "Depthwise", "Lossguide"]),
+                    # Tuned parameters (with different labels to avoid name collisions in hyperopt)
+                    "iterations": hp.quniform("iterations_plain", 10, 200, 10),
+                    "learning_rate": hp.loguniform("learning_rate_plain", np.log(0.01), np.log(0.3)),
+                    "depth": hp.quniform("depth_plain", 4, 10, 1),
+                    "l2_leaf_reg": hp.loguniform("l2_leaf_reg_plain", np.log(1), np.log(10)),
+                    "random_strength": hp.loguniform("random_strength_plain", np.log(0.1), np.log(10)),
+                    "one_hot_max_size": hp.quniform("one_hot_max_size_plain", 2, 20, 1),
+                    "min_data_in_leaf": hp.quniform("min_data_in_leaf_plain", 1, 30, 1),
+                    "subsample": hp.uniform("subsample_plain", 0.6, 1.0),
+                    "bootstrap_type": hp.choice("bootstrap_type_plain", ["Bayesian", "Bernoulli", "MVS"]),
+                    "bagging_temperature": hp.uniform("bagging_temperature_plain", 0.0, 1.0),
+                    "diffusion_temperature": hp.loguniform("diffusion_temperature_plain", 0, 4),
+                    "allow_const_label": hp.choice("allow_const_label_plain", [True, False]),
+                    "posterior_sampling": hp.choice("posterior_sampling_plain", [hp.choice("langevin_inner_plain", [True, False]), False]),
+                    "langevin": hp.choice("langevin_outer_plain", [True, False]),
+                    "fold_len_multiplier": hp.uniform("fold_len_multiplier_plain", 1.01, 2.0),
+                    "approx_on_full_history": hp.choice("approx_on_full_history_plain", [True, False]),
+
+                    # Fixed parameters (same as above)
+                    "loss_function": "RMSE",
+                    "eval_metric": "RMSE",
+                    "border_count": 254,
+                    "max_ctr_complexity": 4,
+                    "feature_border_type": 'GreedyLogSum',
+                    "combinations_ctr": ['Borders:CtrBorderCount=15:CtrBorderType=Uniform:TargetBorderCount=1:TargetBorderType=MinEntropy:Prior=0/1:Prior=0.5/1:Prior=1/1', 'Counter:CtrBorderCount=15:CtrBorderType=Uniform:Prior=0/1'],
+                    "ctr_leaf_count_limit": 18446744073709551615,
+                    "ctr_target_border_count": 1,
+                    "model_shrink_rate": 0,
+                    "model_size_reg": 0.5,
+                    "leaf_estimation_iterations": 10,
+                    "leaf_estimation_method": 'Newton',
+                    "leaf_estimation_backtracking": 'AnyImprovement',
+                    "auto_class_weights": 'None',
+                    "eval_fraction": 0,
+                    "fold_permutation_block": 0,
+                    "counter_calc_method": 'SkipTest',
+                    "score_function": 'Cosine',
+                    "sampling_frequency": 'PerTree',
+                    "boost_from_average": False,
+                    "best_model_min_trees": 1,
+                    "random_seed": 0,
+                    "random_score_type": 'NormalWithModelSizeDecrease',
+                    "penalties_coefficient": 1,
+                    "task_type": 'CPU',
+                    "use_best_model": False,
+                    "nan_mode": 'Min',
+                    "has_time": False,
+                },
+            ]
+        )
     ]
 
-    # Specify integer parameters for CatBoost
+    # Specify integer parameters for CatBoost.
+    # Note: When using nested hp.choice, the keys in best_params_ will be flattened.
+    # So, 'iterations_ordered' or 'iterations_plain' will become 'iterations' after space_eval.
+    # We need to list the final parameter names that should be integers.
     catboost_int_params = [
         "iterations", "depth", "min_data_in_leaf", "one_hot_max_size",
         "fold_permutation_block", "leaf_estimation_iterations", "best_model_min_trees",
-        "border_count", "max_ctr_complexity", "ctr_target_border_count" # Added from fixed params
+        "border_count", "max_ctr_complexity", "ctr_target_border_count"
     ]
 
     optimizer = StepwiseHyperoptOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
-        max_evals_per_step=10, # Increased evals to explore the space better
+        max_evals_per_step=10,
         random_state=42,
-        int_params=catboost_int_params, # Pass CatBoost specific integer parameters
-        scoring="neg_root_mean_squared_error" # Appropriate scoring for RMSE loss
+        int_params=catboost_int_params,
+        scoring="neg_root_mean_squared_error"
     )
 
-    # This fit is expected to pass now due to the conditional hyperparameter space
     optimizer.fit(X_train, y_train)
 
     assert optimizer.best_params_ is not None
@@ -140,4 +182,4 @@ def test_catboost_regressor_initialization(catboost_data):
         assert optimizer.best_params_["grow_policy"] == "SymmetricTree"
     
     assert optimizer.best_score_ is not None
-    assert optimizer.best_score_ < 0 # For neg_root_mean_squared_error, score is negative
+    assert optimizer.best_score_ < 0
