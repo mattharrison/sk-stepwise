@@ -32,28 +32,48 @@ def test_catboost_regressor_initialization(catboost_data):
 
     # Define param_space_sequence organized into logical steps
     param_space_sequence = [
-        # Step 1: Core Tree Parameters (Iterations, Depth)
-        {
-            "iterations": hp.quniform("iterations", 10, 200, 10),
-            "depth": hp.quniform("depth", 4, 10, 1),
-            # max_leaves moved to Step 5 as it's conditional on grow_policy='Lossguide'
-        },
-        # Step 2: Regularization & Overfitting Prevention
-        {
-            "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
-            "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
-            "od_type": hp.choice("od_type", ["IncToDec", "Iter"]),
-            "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0)),
-            "od_wait": hp.quniform("od_wait", 10, 50, 5),
-        },
-        # Step 3: Learning Process & Data Sampling
-        {
-            "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)),
-            "subsample": hp.uniform("subsample", 0.6, 1.0),
-            "colsample_bylevel": hp.uniform("colsample_bylevel", 0.6, 1.0),
-            "bootstrap_type": bootstrap_type_and_temp, # Use the defined conditional choice
-        },
-        # Step 4: Feature Handling
+        # Combined Step 1 (formerly Step 5 & 1): Boosting Type, Grow Policy, and Core Tree Parameters
+        hp.choice(
+            "boosting_strategy_and_core_params", # A choice for the boosting strategy sub-space
+            [
+                # Option 1: Ordered Boosting (grow_policy must be SymmetricTree)
+                {
+                    "boosting_type": "Ordered",
+                    "grow_policy": "SymmetricTree", # Forced to SymmetricTree for Ordered boosting
+                    "iterations": hp.quniform("iterations_ordered", 10, 200, 10),
+                    "depth": hp.quniform("depth_ordered", 4, 10, 1),
+                    # max_leaves is NOT applicable here
+                },
+                # Option 2: Plain Boosting (grow_policy can be any)
+                hp.choice(
+                    "plain_boosting_grow_policy_and_core_params",
+                    [
+                        {
+                            "boosting_type": "Plain",
+                            "grow_policy": "SymmetricTree",
+                            "iterations": hp.quniform("iterations_plain_symmetric", 10, 200, 10),
+                            "depth": hp.quniform("depth_plain_symmetric", 4, 10, 1),
+                            # max_leaves is NOT applicable here
+                        },
+                        {
+                            "boosting_type": "Plain",
+                            "grow_policy": "Depthwise",
+                            "iterations": hp.quniform("iterations_plain_depthwise", 10, 200, 10),
+                            "depth": hp.quniform("depth_plain_depthwise", 4, 10, 1),
+                            # max_leaves is NOT applicable here
+                        },
+                        {
+                            "boosting_type": "Plain",
+                            "grow_policy": "Lossguide",
+                            "iterations": hp.quniform("iterations_plain_lossguide", 10, 200, 10),
+                            "depth": hp.quniform("depth_plain_lossguide", 4, 10, 1),
+                            "max_leaves": hp.quniform("max_leaves", 16, 128, 16), # max_leaves only with Lossguide
+                        },
+                    ]
+                ),
+            ]
+        ),
+        # Step 2 (formerly Step 4): Feature Handling
         {
             "one_hot_max_size": hp.quniform("one_hot_max_size", 2, 20, 1),
             "border_count": hp.quniform("border_count", 32, 255, 1),
@@ -61,40 +81,22 @@ def test_catboost_regressor_initialization(catboost_data):
             "has_time": hp.choice("has_time", [True, False]),
             "min_data_in_leaf": hp.quniform("min_data_in_leaf", 1, 30, 1),
         },
-        # Step 5: Boosting Type & Grow Policy (Conditional, includes max_leaves)
-        hp.choice(
-            "boosting_strategy", # A choice for the boosting strategy sub-space
-            [
-                # Option 1: Ordered Boosting (grow_policy must be SymmetricTree)
-                {
-                    "boosting_type": "Ordered",
-                    "grow_policy": "SymmetricTree", # Forced to SymmetricTree for Ordered boosting
-                    # max_leaves is NOT applicable here
-                },
-                # Option 2: Plain Boosting (grow_policy can be any)
-                hp.choice(
-                    "plain_boosting_grow_policy",
-                    [
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "SymmetricTree",
-                            # max_leaves is NOT applicable here
-                        },
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "Depthwise",
-                            # max_leaves is NOT applicable here
-                        },
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "Lossguide",
-                            "max_leaves": hp.quniform("max_leaves", 16, 128, 16), # max_leaves only with Lossguide
-                        },
-                    ]
-                ),
-            ]
-        ),
-        # Step 6: Miscellaneous/Advanced
+        # Step 3 (formerly Step 2): Regularization & Overfitting Prevention
+        {
+            "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
+            "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
+            "od_type": hp.choice("od_type", ["IncToDec", "Iter"]),
+            "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0)),
+            "od_wait": hp.quniform("od_wait", 10, 50, 5),
+        },
+        # Step 4 (formerly Step 3): Learning Process & Data Sampling
+        {
+            "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)),
+            "subsample": hp.uniform("subsample", 0.6, 1.0),
+            "colsample_bylevel": hp.uniform("colsample_bylevel", 0.6, 1.0),
+            "bootstrap_type": bootstrap_type_and_temp, # Use the defined conditional choice
+        },
+        # Step 5 (formerly Step 6): Miscellaneous/Advanced
         {
             "use_best_model": hp.choice("use_best_model", [True, False]),
             "eval_metric": hp.choice("eval_metric", ["RMSE", "MAE"]), # Example metrics for regression
@@ -104,11 +106,12 @@ def test_catboost_regressor_initialization(catboost_data):
     ]
 
     # Specify integer parameters for CatBoost.
-    # max_leaves is now conditional, but its name remains "max_leaves" when present.
+    # Note: When using nested hp.choice, the keys in best_params_ will be flattened.
+    # So, 'iterations_ordered' or 'iterations_plain_symmetric' will become 'iterations'.
+    # We need to list the final parameter names that should be integers.
     catboost_int_params = [
-        "iterations", "depth", "od_wait",
-        "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf",
-        "max_leaves" # Keep max_leaves here, clean_int_params will handle if it's not present
+        "iterations", "depth", "max_leaves", "od_wait",
+        "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf"
     ]
 
     optimizer = StepwiseHyperoptOptimizer(
@@ -134,6 +137,7 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "boosting_type" in optimizer.best_params_
     assert "grow_policy" in optimizer.best_params_
     assert "subsample" in optimizer.best_params_
+    assert "colsample_bylevel" in optimizer.best_params_
     assert "bootstrap_type" in optimizer.best_params_
     
     # Assert bagging_temperature only if bootstrap_type is Bayesian
@@ -150,7 +154,6 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "border_count" in optimizer.best_params_
     assert "has_time" in optimizer.best_params_
     assert "max_ctr_complexity" in optimizer.best_params_
-    assert "colsample_bylevel" in optimizer.best_params_
     assert "used_ram_limit" in optimizer.best_params_
     assert "objective" in optimizer.best_params_
 
