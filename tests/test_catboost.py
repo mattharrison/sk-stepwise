@@ -20,90 +20,80 @@ def test_catboost_regressor_initialization(catboost_data):
 
     model = CatBoostRegressor(random_state=42, silent=True)
 
-    # Define param_space_sequence based on the "Which Parameters to tune?" table
-    # Correctly define conditional grow_policy based on boosting_type
+    # Define conditional bootstrap_type and bagging_temperature
+    # This needs to be defined once and then referenced in both 'Ordered' and 'Plain' options
+    bootstrap_type_and_temp = hp.choice(
+        "bootstrap_choice",
+        [
+            ("Bayesian", {"bagging_temperature": hp.uniform("bagging_temperature", 0.0, 1.0)}),
+            "Bernoulli",
+            "MVS"
+        ]
+    )
+
+    # Define param_space_sequence organized into logical steps
     param_space_sequence = [
+        # Step 1: Core Tree Parameters (Iterations, Depth, Leaves)
+        {
+            "iterations": hp.quniform("iterations", 10, 200, 10),
+            "depth": hp.quniform("depth", 4, 10, 1),
+            "max_leaves": hp.quniform("max_leaves", 16, 128, 16),
+        },
+        # Step 2: Regularization & Overfitting Prevention
+        {
+            "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
+            "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
+            "od_type": hp.choice("od_type", ["IncToDec", "Iter"]),
+            "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0)),
+            "od_wait": hp.quniform("od_wait", 10, 50, 5),
+        },
+        # Step 3: Learning Process & Data Sampling
+        {
+            "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)),
+            "subsample": hp.uniform("subsample", 0.6, 1.0),
+            "colsample_bylevel": hp.uniform("colsample_bylevel", 0.6, 1.0),
+            "bootstrap_type": bootstrap_type_and_temp, # Use the defined conditional choice
+        },
+        # Step 4: Feature Handling
+        {
+            "one_hot_max_size": hp.quniform("one_hot_max_size", 2, 20, 1),
+            "border_count": hp.quniform("border_count", 32, 255, 1),
+            "max_ctr_complexity": hp.quniform("max_ctr_complexity", 1, 8, 1),
+            "has_time": hp.choice("has_time", [True, False]),
+            "min_data_in_leaf": hp.quniform("min_data_in_leaf", 1, 30, 1),
+            # "per_float_feature_quantization" was in the table but not in the previous code,
+            # and it's a complex string parameter. Omitting for simplicity unless explicitly requested.
+            # "per_float_feature_quantization": hp.choice("per_float_feature_quantization", [None, "10:100", "10:255"]),
+        },
+        # Step 5: Boosting Type & Grow Policy (Conditional)
         hp.choice(
-            "catboost_params", # A single top-level choice for the entire parameter set
+            "boosting_strategy", # A choice for the boosting strategy sub-space
             [
                 # Option 1: Ordered Boosting (grow_policy must be SymmetricTree)
                 {
                     "boosting_type": "Ordered",
                     "grow_policy": "SymmetricTree", # Forced to SymmetricTree for Ordered boosting
-                    # Tuned parameters
-                    "learning_rate": hp.loguniform("learning_rate_ordered", np.log(0.01), np.log(0.3)),
-                    "random_strength": hp.loguniform("random_strength_ordered", np.log(0.1), np.log(10)),
-                    "one_hot_max_size": hp.quniform("one_hot_max_size_ordered", 2, 20, 1),
-                    "l2_leaf_reg": hp.loguniform("l2_leaf_reg_ordered", np.log(1), np.log(10)),
-                    # Conditional bagging_temperature
-                    "bootstrap_type": hp.choice(
-                        "bootstrap_type_ordered",
-                        [
-                            ("Bayesian", {"bagging_temperature": hp.uniform("bagging_temperature_ordered_bayesian", 0.0, 1.0)}),
-                            "Bernoulli",
-                            "MVS"
-                        ]
-                    ),
-                    "iterations": hp.quniform("iterations_ordered", 10, 200, 10),
-                    "use_best_model": hp.choice("use_best_model_ordered", [True, False]),
-                    "eval_metric": hp.choice("eval_metric_ordered", ["RMSE", "MAE"]), # Example metrics for regression
-                    "od_type": hp.choice("od_type_ordered", ["IncToDec", "Iter"]), # Overfitting detector type
-                    "od_pval": hp.loguniform("od_pval_ordered", np.log(1e-10), np.log(1.0)), # Overfitting detector threshold
-                    "od_wait": hp.quniform("od_wait_ordered", 10, 50, 5), # Number of iterations to wait
-                    "depth": hp.quniform("depth_ordered", 4, 10, 1),
-                    "border_count": hp.quniform("border_count_ordered", 32, 255, 1), # Number of splits for numeric features
-                    "has_time": hp.choice("has_time_ordered", [True, False]),
-                    "min_data_in_leaf": hp.quniform("min_data_in_leaf_ordered", 1, 30, 1),
-                    "max_leaves": hp.quniform("max_leaves_ordered", 16, 128, 16), # Max leaves in a tree
-                    "max_ctr_complexity": hp.quniform("max_ctr_complexity_ordered", 1, 8, 1),
-                    "subsample": hp.uniform("subsample_ordered", 0.6, 1.0),
-                    "colsample_bylevel": hp.uniform("colsample_bylevel_ordered", 0.6, 1.0),
-                    #"used_ram_limit": hp.choice("used_ram_limit_ordered", [None, "1GB", "2GB"]), # Example RAM limit
-                    "objective": hp.choice("objective_ordered", ["RMSE", "MAE"]), # Objective function
                 },
                 # Option 2: Plain Boosting (grow_policy can be any)
                 {
                     "boosting_type": "Plain",
                     "grow_policy": hp.choice("grow_policy_plain", ["SymmetricTree", "Depthwise", "Lossguide"]),
-                    # Tuned parameters (with different labels to avoid name collisions in hyperopt)
-                    "learning_rate": hp.loguniform("learning_rate_plain", np.log(0.01), np.log(0.3)),
-                    "random_strength": hp.loguniform("random_strength_plain", np.log(0.1), np.log(10)),
-                    "one_hot_max_size": hp.quniform("one_hot_max_size_plain", 2, 20, 1),
-                    "l2_leaf_reg": hp.loguniform("l2_leaf_reg_plain", np.log(1), np.log(10)),
-                    # Conditional bagging_temperature
-                    "bootstrap_type": hp.choice(
-                        "bootstrap_type_plain",
-                        [
-                            ("Bayesian", {"bagging_temperature": hp.uniform("bagging_temperature_plain_bayesian", 0.0, 1.0)}),
-                            "Bernoulli",
-                            "MVS"
-                        ]
-                    ),
-                    "iterations": hp.quniform("iterations_plain", 10, 200, 10),
-                    "use_best_model": hp.choice("use_best_model_plain", [True, False]),
-                    "eval_metric": hp.choice("eval_metric_plain", ["RMSE", "MAE"]),
-                    "od_type": hp.choice("od_type_plain", ["IncToDec", "Iter"]),
-                    "od_pval": hp.loguniform("od_pval_plain", np.log(1e-10), np.log(1.0)),
-                    "od_wait": hp.quniform("od_wait_plain", 10, 50, 5),
-                    "depth": hp.quniform("depth_plain", 4, 10, 1),
-                    "border_count": hp.quniform("border_count_plain", 32, 255, 1),
-                    "has_time": hp.choice("has_time_plain", [True, False]),
-                    "min_data_in_leaf": hp.quniform("min_data_in_leaf_plain", 1, 30, 1),
-                    "max_leaves": hp.quniform("max_leaves_plain", 16, 128, 16),
-                    "max_ctr_complexity": hp.quniform("max_ctr_complexity_plain", 1, 8, 1),
-                    "subsample": hp.uniform("subsample_plain", 0.6, 1.0),
-                    "colsample_bylevel": hp.uniform("colsample_bylevel_plain", 0.6, 1.0),
-                    #"used_ram_limit": hp.choice("used_ram_limit_plain", [None, "1GB", "2GB"]),
-                    "objective": hp.choice("objective_plain", ["RMSE", "MAE"]),
                 },
             ]
-        )
+        ),
+        # Step 6: Miscellaneous/Advanced
+        {
+            "use_best_model": hp.choice("use_best_model", [True, False]),
+            "eval_metric": hp.choice("eval_metric", ["RMSE", "MAE"]), # Example metrics for regression
+            "objective": hp.choice("objective", ["RMSE", "MAE"]), # Objective function
+            "used_ram_limit": hp.choice("used_ram_limit", [None, "1GB", "2GB"]), # Example RAM limit
+        }
     ]
 
     # Specify integer parameters for CatBoost.
     catboost_int_params = [
-        "iterations", "depth", "one_hot_max_size", "od_wait",
-        "border_count", "min_data_in_leaf", "max_leaves", "max_ctr_complexity"
+        "iterations", "depth", "max_leaves", "od_wait",
+        "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf"
     ]
 
     optimizer = StepwiseHyperoptOptimizer(
