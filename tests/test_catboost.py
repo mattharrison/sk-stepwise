@@ -20,8 +20,35 @@ def test_catboost_regressor_initialization(catboost_data):
     model = CatBoostRegressor(random_state=42, silent=True)
     param_space_sequence = [
         {
-            "iterations": hp.quniform("iterations", 10, 50, 10),
+            "iterations": hp.quniform("iterations", 10, 100, 10),
             "learning_rate": hp.loguniform("learning_rate", -3, 0),
+            "depth": hp.quniform("depth", 4, 10, 1),
+            "l2_leaf_reg": hp.loguniform("l2_leaf_reg", -2, 1),
+            "bootstrap_type": hp.choice("bootstrap_type", ["Bayesian", "Bernoulli", "MVS"]),
+            "subsample": hp.uniform("subsample", 0.6, 1.0),
+            "random_strength": hp.loguniform("random_strength", -2, 1),
+            "min_data_in_leaf": hp.quniform("min_data_in_leaf", 1, 20, 1),
+            "grow_policy": hp.choice("grow_policy", ["SymmetricTree", "Depthwise", "Lossguide"]),
+            "nan_mode": hp.choice("nan_mode", ["Forbidden", "Min", "Max"]),
+            "one_hot_max_size": hp.quniform("one_hot_max_size", 2, 10, 1),
+            "has_time": hp.choice("has_time", [True, False]),
+            "rsm": hp.uniform("rsm", 0.8, 1.0),
+            "fold_permutation_block": hp.quniform("fold_permutation_block", 1, 10, 1),
+            "leaf_estimation_method": hp.choice("leaf_estimation_method", ["Newton", "Gradient"]),
+            "leaf_estimation_iterations": hp.quniform("leaf_estimation_iterations", 1, 10, 1),
+            "leaf_estimation_backtracking": hp.choice("leaf_estimation_backtracking", ["No", "AnyImprovement"]),
+            "fold_len_multiplier": hp.uniform("fold_len_multiplier", 1.01, 2.0),
+            "approx_on_full_history": hp.choice("approx_on_full_history", [True, False]),
+            "boosting_type": hp.choice("boosting_type", ["Ordered", "Plain"]),
+            "boost_from_average": hp.choice("boost_from_average", [True, False]),
+            "langevin": hp.choice("langevin", [True, False]),
+            "diffusion_temperature": hp.loguniform("diffusion_temperature", 0, 4),
+            "posterior_sampling": hp.choice("posterior_sampling", [True, False]),
+            "allow_const_label": hp.choice("allow_const_label", [True, False]),
+            "score_function": hp.choice("score_function", ["Cosine", "L2", "NewtonCosine", "NewtonL2"]),
+            "penalties_coefficient": hp.uniform("penalties_coefficient", 0.1, 10.0),
+            "model_shrink_rate": hp.uniform("model_shrink_rate", 0.0, 1.0),
+            "model_shrink_mode": hp.choice("model_shrink_mode", ["Constant", "Decreasing"]),
         }
     ]
 
@@ -32,11 +59,37 @@ def test_catboost_regressor_initialization(catboost_data):
         random_state=42,
     )
 
-    # This fit is expected to fail initially, demonstrating the "Red" step of TDD
-    # The failure might be due to parameter handling, or other CatBoost specifics
+    # This fit is expected to pass after the changes in src/sk_stepwise/__init__.py
     optimizer.fit(X_train, y_train)
 
     assert optimizer.best_params_ is not None
     assert "iterations" in optimizer.best_params_
     assert "learning_rate" in optimizer.best_params_
+    assert "depth" in optimizer.best_params_
+    assert "l2_leaf_reg" in optimizer.best_params_
+    assert "bootstrap_type" in optimizer.best_params_
+    assert "subsample" in optimizer.best_params_
+    assert "random_strength" in optimizer.best_params_
+    assert "min_data_in_leaf" in optimizer.best_params_
+    assert "grow_policy" in optimizer.best_params_
+    assert "nan_mode" in optimizer.best_params_
+    assert "one_hot_max_size" in optimizer.best_params_
+    assert "has_time" in optimizer.best_params_
+    assert "rsm" in optimizer.best_params_
+    assert "fold_permutation_block" in optimizer.best_params_
+    assert "leaf_estimation_method" in optimizer.best_params_
+    assert "leaf_estimation_iterations" in optimizer.best_params_
+    assert "leaf_estimation_backtracking" in optimizer.best_params_
+    assert "fold_len_multiplier" in optimizer.best_params_
+    assert "approx_on_full_history" in optimizer.best_params_
+    assert "boosting_type" in optimizer.best_params_
+    assert "boost_from_average" in optimizer.best_params_
+    assert "langevin" in optimizer.best_params_
+    assert "diffusion_temperature" in optimizer.best_params_
+    assert "posterior_sampling" in optimizer.best_params_
+    assert "allow_const_label" in optimizer.best_params_
+    assert "score_function" in optimizer.best_params_
+    assert "penalties_coefficient" in optimizer.best_params_
+    assert "model_shrink_rate" in optimizer.best_params_
+    assert "model_shrink_mode" in optimizer.best_params_
     assert optimizer.best_score_ is not None
