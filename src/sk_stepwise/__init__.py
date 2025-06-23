@@ -48,15 +48,15 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     random_state: int = 42
     best_params_: dict[str, PARAM] = field(default_factory=dict)
     best_score_: float = None
+    # New field to specify which parameters should be integers
+    int_params: list[str] = field(default_factory=list)
 
     def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
-        int_vals = ["max_depth", "reg_alpha"]
-        return {k: int(v) if k in int_vals else v for k, v in params.items()}
+        # Use the instance's int_params list
+        return {k: int(v) if k in self.int_params else v for k, v in params.items()}
 
     def objective(self, params: dict[str, PARAM]) -> float:
-        # I added this
         params = self.clean_int_params(params)
-        # END
         current_params = {**self.best_params_, **params}
         self.model.set_params(**current_params)
         score = cross_val_score(
@@ -81,9 +81,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             )
 
             step_best_params = space_eval(param_space, best)
-            # I added this
             step_best_params = self.clean_int_params(step_best_params)
-            # END
             self.best_params_.update(step_best_params)
             self.best_score_ = -min(trials.losses())
 
@@ -101,3 +99,4 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
 
     def score(self, X: pd.DataFrame, y: pd.Series) -> float:
         return self.model.score(X, y)
+
