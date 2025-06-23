@@ -129,55 +129,37 @@ def test_svm_conditional_hyperparameters():
     model = SVC(random_state=42, probability=True) # probability=True for cross_val_score with default scoring
 
     # Define a parameter space with conditional parameters for SVC
-    # This demonstrates how hyperopt handles dependencies
+    # This uses the hyperopt nested dictionary structure
     param_space_sequence = [
-        {
-            "C": hp.loguniform("C", np.log(0.1), np.log(10)),
-            "kernel": hp.choice(
-                "kernel",
-                [
-                    ("linear", {}),  # No extra params for linear
-                    ("rbf", {"gamma": hp.loguniform("gamma_rbf", np.log(0.01), np.log(10))}),
-                    ("poly", {
-                        "degree": hp.quniform("degree", 2, 5, 1),
-                        "gamma": hp.loguniform("gamma_poly", np.log(0.01), np.log(10)),
-                        "coef0": hp.uniform("coef0", 0, 1)
-                    }),
-                ],
-            ),
-        }
+        hp.choice(
+            "classifier_params", # This is the key that will hold the chosen dictionary
+            [
+                {
+                    "kernel": "linear",
+                    "C": hp.loguniform("linear_C", np.log(0.1), np.log(10)),
+                },
+                {
+                    "kernel": "rbf",
+                    "C": hp.loguniform("rbf_C", np.log(0.1), np.log(10)),
+                    "gamma": hp.loguniform("rbf_gamma", np.log(0.01), np.log(10)),
+                },
+                {
+                    "kernel": "poly",
+                    "C": hp.loguniform("poly_C", np.log(0.1), np.log(10)),
+                    "degree": hp.quniform("poly_degree", 2, 5, 1),
+                    "gamma": hp.loguniform("poly_gamma", np.log(0.01), np.log(10)),
+                    "coef0": hp.uniform("poly_coef0", 0, 1),
+                },
+            ],
+        )
     ]
 
-    # The objective function will receive a flattened dictionary of parameters.
-    # We need to unpack the 'kernel' choice.
-    def unpack_kernel_params(params):
-        kernel_name, kernel_specific_params = params["kernel"]
-        new_params = {**params, "kernel": kernel_name}
-        new_params.update(kernel_specific_params)
-        return new_params
-
-    # Override the objective function to handle the nested kernel choice
-    class SVCOptimizer(sw.StepwiseHyperoptOptimizer):
-        def objective(self, params: dict[str, sw.PARAM]) -> float:
-            # Unpack the kernel and its specific parameters
-            unpacked_params = unpack_kernel_params(params)
-            
-            # Clean integer parameters if any (e.g., degree for poly kernel)
-            unpacked_params = self.clean_int_params(unpacked_params)
-
-            current_params = {**self.best_params_, **unpacked_params}
-            self.model.set_params(**current_params)
-            
-            # Use 'accuracy' for classification
-            score = cross_val_score(
-                self.model, self.X, self.y, cv=self.cv, scoring="accuracy", n_jobs=-1
-            )
-            return -np.mean(score)
-
-    # Specify 'degree' as an integer parameter
+    # Specify 'degree' as an integer parameter.
+    # Note: The key in best_params_ will be 'degree' directly, not 'poly_degree'.
+    # This is because hyperopt flattens the dictionary.
     int_params_to_clean = ["degree"]
 
-    optimizer = SVCOptimizer(
+    optimizer = sw.StepwiseHyperoptOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=10, # More evals to explore kernel choices
@@ -189,13 +171,27 @@ def test_svm_conditional_hyperparameters():
     optimizer.fit(X, y)
 
     assert optimizer.best_params_ is not None
-    assert "C" in optimizer.best_params_
     assert "kernel" in optimizer.best_params_
+    assert "C" in optimizer.best_params_ # C will always be present
 
     # Check that if 'poly' kernel is chosen, 'degree' is an integer
     if optimizer.best_params_["kernel"] == "poly":
         assert "degree" in optimizer.best_params_
         assert isinstance(optimizer.best_params_["degree"], int)
+        # Also check that gamma and coef0 are present for poly
+        assert "gamma" in optimizer.best_params_
+        assert "coef0" in optimizer.best_params_
+    elif optimizer.best_params_["kernel"] == "rbf":
+        assert "gamma" in optimizer.best_params_
+        # Ensure poly-specific params are NOT present
+        assert "degree" not in optimizer.best_params_
+        assert "coef0" not in optimizer.best_params_
+    elif optimizer.best_params_["kernel"] == "linear":
+        # Ensure RBF/Poly specific params are NOT present
+        assert "gamma" not in optimizer.best_params_
+        assert "degree" not in optimizer.best_params_
+        assert "coef0" not in optimizer.best_params_
     
     assert optimizer.best_score_ is not None
     assert optimizer.best_score_ > 0 # Score should be positive for accuracy
+
