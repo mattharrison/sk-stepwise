@@ -69,7 +69,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         self.y = y
         for step, param_space in enumerate(self.param_space_sequence):
             print(f"Optimizing step {step + 1}/{len(self.param_space_sequence)}")
-
+            param_space = self.check_for_param_conflicts(param_space)
             trials = Trials()
             best = fmin(
                 fn=self.objective,
@@ -93,6 +93,9 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         self.model.fit(X, y, *args, **kwargs)
 
         return self
+
+    def check_for_param_conflicts(self, param_space):
+        # AI! implement this
 
     def predict(self, X: pd.DataFrame) -> ArrayLike:
         return self.model.predict(X)
