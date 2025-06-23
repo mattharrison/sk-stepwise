@@ -21,21 +21,25 @@ def test_catboost_regressor_initialization(catboost_data):
     model = CatBoostRegressor(random_state=42, silent=True)
 
     # Define conditional bootstrap_type and bagging_temperature
-    bootstrap_type_and_temp = hp.choice(
+    # Restructured to return a dictionary that includes 'bootstrap_type'
+    # and conditionally includes 'bagging_temperature'.
+    bootstrap_type_choice = hp.choice(
         "bootstrap_choice",
         [
-            ("Bayesian", {"bagging_temperature": hp.uniform("bagging_temperature", 0.0, 1.0)}),
-            "Bernoulli",
-            "MVS"
+            {"bootstrap_type": "Bayesian", "bagging_temperature": hp.uniform("bagging_temperature", 0.0, 1.0)},
+            {"bootstrap_type": "Bernoulli"},
+            {"bootstrap_type": "MVS"}
         ]
     )
 
     # Define conditional od_type and od_pval
-    od_type_and_pval = hp.choice(
+    # Restructured to return a dictionary that includes 'od_type'
+    # and conditionally includes 'od_pval'.
+    od_type_choice = hp.choice(
         "od_type_choice",
         [
-            ("IncToDec", {"od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0))}),
-            "Iter"
+            {"od_type": "IncToDec", "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0))},
+            {"od_type": "Iter"}
         ]
     )
 
@@ -94,7 +98,7 @@ def test_catboost_regressor_initialization(catboost_data):
         {
             "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
             "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
-            #"od_type": od_type_and_pval, # Use the defined conditional choice
+            **od_type_choice, # Use the defined conditional choice
             "od_wait": hp.quniform("od_wait", 10, 50, 5),
         },
         # Step 4 (formerly Step 3): Learning Process & Data Sampling
@@ -102,7 +106,7 @@ def test_catboost_regressor_initialization(catboost_data):
             "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)),
             "subsample": hp.uniform("subsample", 0.6, 1.0),
             "colsample_bylevel": hp.uniform("colsample_bylevel", 0.6, 1.0),
-            "bootstrap_type": bootstrap_type_and_temp, # Use the defined conditional choice
+            **bootstrap_type_choice, # Use the defined conditional choice
         },
         # Step 5 (formerly Step 6): Miscellaneous/Advanced
         {
@@ -154,7 +158,7 @@ def test_catboost_regressor_initialization(catboost_data):
 
     assert "use_best_model" in optimizer.best_params_
     assert "eval_metric" in optimizer.best_params_
-    #assert "od_type" in optimizer.best_params_
+    assert "od_type" in optimizer.best_params_ # od_type will always be present now
     
     # Assert od_pval only if od_type is IncToDec
     if optimizer.best_params_["od_type"] == "IncToDec":

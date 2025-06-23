@@ -55,18 +55,8 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         params = self.clean_int_params(params)
         current_params = {**self.best_params_, **params}
 
-        # CatBoost specific conditional parameter handling
-        # Remove 'max_leaves' if grow_policy is not 'Lossguide'
-        if "grow_policy" in current_params and current_params["grow_policy"] != "Lossguide":
-            current_params.pop("max_leaves", None)
-        
-        # Remove 'bagging_temperature' if bootstrap_type is not 'Bayesian'
-        if "bootstrap_type" in current_params and current_params["bootstrap_type"] != "Bayesian":
-            current_params.pop("bagging_temperature", None)
-
-        # Remove 'od_pval' if od_type is not 'IncToDec'
-        if "od_type" in current_params and current_params["od_type"] != "IncToDec":
-            current_params.pop("od_pval", None)
+        # Removed CatBoost specific conditional parameter handling from here.
+        # This logic should be handled by the hyperopt search space definition itself.
 
         self.model.set_params(**current_params)
         score = cross_val_score(
