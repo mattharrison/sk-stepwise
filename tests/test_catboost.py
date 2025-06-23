@@ -48,7 +48,7 @@ def test_catboost_regressor_initialization(catboost_data):
             "langevin": langevin_choice, # Use the defined choice
             "diffusion_temperature": hp.loguniform("diffusion_temperature", 0, 4),
             # posterior_sampling is True only if langevin is True
-            "posterior_sampling": hp.choice("posterior_sampling", [True if langevin_choice == True else False, False]),
+            "posterior_sampling": hp.choice("posterior_sampling", [langevin_choice, False]),
             "allow_const_label": hp.choice("allow_const_label", [True, False]),
             "score_function": hp.choice("score_function", ["Cosine", "L2"]),
             "penalties_coefficient": hp.uniform("penalties_coefficient", 0.1, 10.0),
