@@ -30,6 +30,15 @@ def test_catboost_regressor_initialization(catboost_data):
         ]
     )
 
+    # Define conditional od_type and od_pval
+    od_type_and_pval = hp.choice(
+        "od_type_choice",
+        [
+            ("IncToDec", {"od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0))}),
+            "Iter"
+        ]
+    )
+
     # Define param_space_sequence organized into logical steps
     param_space_sequence = [
         # Combined Step 1 (formerly Step 5 & 1): Boosting Type, Grow Policy, and Core Tree Parameters
@@ -85,8 +94,7 @@ def test_catboost_regressor_initialization(catboost_data):
         {
             "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
             "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
-            "od_type": hp.choice("od_type", ["IncToDec", "Iter"]),
-            "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0)),
+            "od_type": od_type_and_pval, # Use the defined conditional choice
             "od_wait": hp.quniform("od_wait", 10, 50, 5),
         },
         # Step 4 (formerly Step 3): Learning Process & Data Sampling
@@ -106,9 +114,6 @@ def test_catboost_regressor_initialization(catboost_data):
     ]
 
     # Specify integer parameters for CatBoost.
-    # Note: When using nested hp.choice, the keys in best_params_ will be flattened.
-    # So, 'iterations_ordered' or 'iterations_plain_symmetric' will become 'iterations'.
-    # We need to list the final parameter names that should be integers.
     catboost_int_params = [
         "iterations", "depth", "max_leaves", "od_wait",
         "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf"
@@ -149,7 +154,14 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "use_best_model" in optimizer.best_params_
     assert "eval_metric" in optimizer.best_params_
     assert "od_type" in optimizer.best_params_
-    assert "od_pval" in optimizer.best_params_
+    
+    # Assert od_pval only if od_type is IncToDec
+    if optimizer.best_params_["od_type"] == "IncToDec":
+        assert "od_pval" in optimizer.best_params_
+        assert isinstance(optimizer.best_params_["od_pval"], float)
+    else:
+        assert "od_pval" not in optimizer.best_params_
+
     assert "od_wait" in optimizer.best_params_
     assert "border_count" in optimizer.best_params_
     assert "has_time" in optimizer.best_params_
