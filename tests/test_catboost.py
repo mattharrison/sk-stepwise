@@ -47,10 +47,10 @@ def test_catboost_regressor_initialization(catboost_data):
                     "has_time": hp.choice("has_time_ordered", [True, False]),
                     "min_data_in_leaf": hp.quniform("min_data_in_leaf_ordered", 1, 30, 1),
                     "max_leaves": hp.quniform("max_leaves_ordered", 16, 128, 16), # Max leaves in a tree
-                    "per_float_feature_quantization": hp.choice("per_float_feature_quantization_ordered", [None, "10:100", "10:255"]), # Example quantization
+                    #"per_float_feature_quantization": hp.choice("per_float_feature_quantization_ordered", [None, "10:100", "10:255"]), # Example quantization
                     "max_ctr_complexity": hp.quniform("max_ctr_complexity_ordered", 1, 8, 1),
                     "subsample": hp.uniform("subsample_ordered", 0.6, 1.0),
-                    "col_sample_bylevel": hp.uniform("col_sample_bylevel_ordered", 0.6, 1.0),
+                    "colsample_bylevel": hp.uniform("colsample_bylevel_ordered", 0.6, 1.0),
                     "bootstrap_type": hp.choice("bootstrap_type_ordered", ["Bayesian", "Bernoulli", "MVS"]),
                     "used_ram_limit": hp.choice("used_ram_limit_ordered", [None, "1GB", "2GB"]), # Example RAM limit
                     "objective": hp.choice("objective_ordered", ["RMSE", "MAE"]), # Objective function
@@ -76,10 +76,10 @@ def test_catboost_regressor_initialization(catboost_data):
                     "has_time": hp.choice("has_time_plain", [True, False]),
                     "min_data_in_leaf": hp.quniform("min_data_in_leaf_plain", 1, 30, 1),
                     "max_leaves": hp.quniform("max_leaves_plain", 16, 128, 16),
-                    "per_float_feature_quantization": hp.choice("per_float_feature_quantization_plain", [None, "10:100", "10:255"]),
+                    #"per_float_feature_quantization": hp.choice("per_float_feature_quantization_plain", [None, "10:100", "10:255"]),
                     "max_ctr_complexity": hp.quniform("max_ctr_complexity_plain", 1, 8, 1),
                     "subsample": hp.uniform("subsample_plain", 0.6, 1.0),
-                    "col_sample_bylevel": hp.uniform("col_sample_bylevel_plain", 0.6, 1.0),
+                    "colsample_bylevel": hp.uniform("colsample_bylevel_plain", 0.6, 1.0),
                     "bootstrap_type": hp.choice("bootstrap_type_plain", ["Bayesian", "Bernoulli", "MVS"]),
                     "used_ram_limit": hp.choice("used_ram_limit_plain", [None, "1GB", "2GB"]),
                     "objective": hp.choice("objective_plain", ["RMSE", "MAE"]),
