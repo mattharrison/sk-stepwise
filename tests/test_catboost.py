@@ -45,7 +45,8 @@ def test_catboost_regressor_initialization(catboost_data):
             "diffusion_temperature": hp.loguniform("diffusion_temperature", 0, 4),
             "posterior_sampling": hp.choice("posterior_sampling", [True, False]),
             "allow_const_label": hp.choice("allow_const_label", [True, False]),
-            "score_function": hp.choice("score_function", ["Cosine", "L2", "NewtonCosine", "NewtonL2"]),
+            # Restricted score_function choices for CPU compatibility
+            "score_function": hp.choice("score_function", ["Cosine", "L2"]),
             "penalties_coefficient": hp.uniform("penalties_coefficient", 0.1, 10.0),
             "model_shrink_rate": hp.uniform("model_shrink_rate", 0.0, 1.0),
             "model_shrink_mode": hp.choice("model_shrink_mode", ["Constant", "Decreasing"]),
