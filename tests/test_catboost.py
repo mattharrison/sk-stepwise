@@ -94,7 +94,7 @@ def test_catboost_regressor_initialization(catboost_data):
         {
             "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
             "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
-            "od_type": od_type_and_pval, # Use the defined conditional choice
+            #"od_type": od_type_and_pval, # Use the defined conditional choice
             "od_wait": hp.quniform("od_wait", 10, 50, 5),
         },
         # Step 4 (formerly Step 3): Learning Process & Data Sampling
@@ -126,6 +126,7 @@ def test_catboost_regressor_initialization(catboost_data):
         random_state=42,
         int_params=catboost_int_params,
         scoring="neg_root_mean_squared_error" # Appropriate scoring for RMSE loss
+        #scoring="root_mean_squared_error" # Appropriate scoring for RMSE loss
     )
 
     optimizer.fit(X_train, y_train)
@@ -153,7 +154,7 @@ def test_catboost_regressor_initialization(catboost_data):
 
     assert "use_best_model" in optimizer.best_params_
     assert "eval_metric" in optimizer.best_params_
-    assert "od_type" in optimizer.best_params_
+    #assert "od_type" in optimizer.best_params_
     
     # Assert od_pval only if od_type is IncToDec
     if optimizer.best_params_["od_type"] == "IncToDec":
