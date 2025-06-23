@@ -35,7 +35,15 @@ def test_catboost_regressor_initialization(catboost_data):
                     "random_strength": hp.loguniform("random_strength_ordered", np.log(0.1), np.log(10)),
                     "one_hot_max_size": hp.quniform("one_hot_max_size_ordered", 2, 20, 1),
                     "l2_leaf_reg": hp.loguniform("l2_leaf_reg_ordered", np.log(1), np.log(10)),
-                    "bagging_temperature": hp.uniform("bagging_temperature_ordered", 0.0, 1.0),
+                    # Conditional bagging_temperature
+                    "bootstrap_type": hp.choice(
+                        "bootstrap_type_ordered",
+                        [
+                            ("Bayesian", {"bagging_temperature": hp.uniform("bagging_temperature_ordered_bayesian", 0.0, 1.0)}),
+                            "Bernoulli",
+                            "MVS"
+                        ]
+                    ),
                     "iterations": hp.quniform("iterations_ordered", 10, 200, 10),
                     "use_best_model": hp.choice("use_best_model_ordered", [True, False]),
                     "eval_metric": hp.choice("eval_metric_ordered", ["RMSE", "MAE"]), # Example metrics for regression
@@ -47,11 +55,9 @@ def test_catboost_regressor_initialization(catboost_data):
                     "has_time": hp.choice("has_time_ordered", [True, False]),
                     "min_data_in_leaf": hp.quniform("min_data_in_leaf_ordered", 1, 30, 1),
                     "max_leaves": hp.quniform("max_leaves_ordered", 16, 128, 16), # Max leaves in a tree
-                    #"per_float_feature_quantization": hp.choice("per_float_feature_quantization_ordered", [None, "10:100", "10:255"]), # Example quantization
                     "max_ctr_complexity": hp.quniform("max_ctr_complexity_ordered", 1, 8, 1),
                     "subsample": hp.uniform("subsample_ordered", 0.6, 1.0),
                     "colsample_bylevel": hp.uniform("colsample_bylevel_ordered", 0.6, 1.0),
-                    "bootstrap_type": hp.choice("bootstrap_type_ordered", ["Bayesian", "Bernoulli", "MVS"]),
                     "used_ram_limit": hp.choice("used_ram_limit_ordered", [None, "1GB", "2GB"]), # Example RAM limit
                     "objective": hp.choice("objective_ordered", ["RMSE", "MAE"]), # Objective function
                 },
@@ -64,7 +70,15 @@ def test_catboost_regressor_initialization(catboost_data):
                     "random_strength": hp.loguniform("random_strength_plain", np.log(0.1), np.log(10)),
                     "one_hot_max_size": hp.quniform("one_hot_max_size_plain", 2, 20, 1),
                     "l2_leaf_reg": hp.loguniform("l2_leaf_reg_plain", np.log(1), np.log(10)),
-                    "bagging_temperature": hp.uniform("bagging_temperature_plain", 0.0, 1.0),
+                    # Conditional bagging_temperature
+                    "bootstrap_type": hp.choice(
+                        "bootstrap_type_plain",
+                        [
+                            ("Bayesian", {"bagging_temperature": hp.uniform("bagging_temperature_plain_bayesian", 0.0, 1.0)}),
+                            "Bernoulli",
+                            "MVS"
+                        ]
+                    ),
                     "iterations": hp.quniform("iterations_plain", 10, 200, 10),
                     "use_best_model": hp.choice("use_best_model_plain", [True, False]),
                     "eval_metric": hp.choice("eval_metric_plain", ["RMSE", "MAE"]),
@@ -76,11 +90,9 @@ def test_catboost_regressor_initialization(catboost_data):
                     "has_time": hp.choice("has_time_plain", [True, False]),
                     "min_data_in_leaf": hp.quniform("min_data_in_leaf_plain", 1, 30, 1),
                     "max_leaves": hp.quniform("max_leaves_plain", 16, 128, 16),
-                    #"per_float_feature_quantization": hp.choice("per_float_feature_quantization_plain", [None, "10:100", "10:255"]),
                     "max_ctr_complexity": hp.quniform("max_ctr_complexity_plain", 1, 8, 1),
                     "subsample": hp.uniform("subsample_plain", 0.6, 1.0),
                     "colsample_bylevel": hp.uniform("colsample_bylevel_plain", 0.6, 1.0),
-                    "bootstrap_type": hp.choice("bootstrap_type_plain", ["Bayesian", "Bernoulli", "MVS"]),
                     "used_ram_limit": hp.choice("used_ram_limit_plain", [None, "1GB", "2GB"]),
                     "objective": hp.choice("objective_plain", ["RMSE", "MAE"]),
                 },
@@ -89,7 +101,6 @@ def test_catboost_regressor_initialization(catboost_data):
     ]
 
     # Specify integer parameters for CatBoost.
-    # These are the final parameter names after hyperopt flattens the space.
     catboost_int_params = [
         "iterations", "depth", "one_hot_max_size", "od_wait",
         "border_count", "min_data_in_leaf", "max_leaves", "max_ctr_complexity"
@@ -119,7 +130,13 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "grow_policy" in optimizer.best_params_
     assert "subsample" in optimizer.best_params_
     assert "bootstrap_type" in optimizer.best_params_
-    assert "bagging_temperature" in optimizer.best_params_
+    
+    # Assert bagging_temperature only if bootstrap_type is Bayesian
+    if optimizer.best_params_["bootstrap_type"] == "Bayesian":
+        assert "bagging_temperature" in optimizer.best_params_
+    else:
+        assert "bagging_temperature" not in optimizer.best_params_
+
     assert "use_best_model" in optimizer.best_params_
     assert "eval_metric" in optimizer.best_params_
     assert "od_type" in optimizer.best_params_
@@ -128,9 +145,8 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "border_count" in optimizer.best_params_
     assert "has_time" in optimizer.best_params_
     assert "max_leaves" in optimizer.best_params_
-    assert "per_float_feature_quantization" in optimizer.best_params_
     assert "max_ctr_complexity" in optimizer.best_params_
-    assert "col_sample_bylevel" in optimizer.best_params_
+    assert "colsample_bylevel" in optimizer.best_params_
     assert "used_ram_limit" in optimizer.best_params_
     assert "objective" in optimizer.best_params_
 
