@@ -21,7 +21,6 @@ def test_catboost_regressor_initialization(catboost_data):
     model = CatBoostRegressor(random_state=42, silent=True)
 
     # Define conditional bootstrap_type and bagging_temperature
-    # This needs to be defined once and then referenced in both 'Ordered' and 'Plain' options
     bootstrap_type_and_temp = hp.choice(
         "bootstrap_choice",
         [
@@ -33,11 +32,11 @@ def test_catboost_regressor_initialization(catboost_data):
 
     # Define param_space_sequence organized into logical steps
     param_space_sequence = [
-        # Step 1: Core Tree Parameters (Iterations, Depth, Leaves)
+        # Step 1: Core Tree Parameters (Iterations, Depth)
         {
             "iterations": hp.quniform("iterations", 10, 200, 10),
             "depth": hp.quniform("depth", 4, 10, 1),
-            "max_leaves": hp.quniform("max_leaves", 16, 128, 16),
+            # max_leaves moved to Step 5 as it's conditional on grow_policy='Lossguide'
         },
         # Step 2: Regularization & Overfitting Prevention
         {
@@ -61,11 +60,8 @@ def test_catboost_regressor_initialization(catboost_data):
             "max_ctr_complexity": hp.quniform("max_ctr_complexity", 1, 8, 1),
             "has_time": hp.choice("has_time", [True, False]),
             "min_data_in_leaf": hp.quniform("min_data_in_leaf", 1, 30, 1),
-            # "per_float_feature_quantization" was in the table but not in the previous code,
-            # and it's a complex string parameter. Omitting for simplicity unless explicitly requested.
-            # "per_float_feature_quantization": hp.choice("per_float_feature_quantization", [None, "10:100", "10:255"]),
         },
-        # Step 5: Boosting Type & Grow Policy (Conditional)
+        # Step 5: Boosting Type & Grow Policy (Conditional, includes max_leaves)
         hp.choice(
             "boosting_strategy", # A choice for the boosting strategy sub-space
             [
@@ -73,12 +69,29 @@ def test_catboost_regressor_initialization(catboost_data):
                 {
                     "boosting_type": "Ordered",
                     "grow_policy": "SymmetricTree", # Forced to SymmetricTree for Ordered boosting
+                    # max_leaves is NOT applicable here
                 },
                 # Option 2: Plain Boosting (grow_policy can be any)
-                {
-                    "boosting_type": "Plain",
-                    "grow_policy": hp.choice("grow_policy_plain", ["SymmetricTree", "Depthwise", "Lossguide"]),
-                },
+                hp.choice(
+                    "plain_boosting_grow_policy",
+                    [
+                        {
+                            "boosting_type": "Plain",
+                            "grow_policy": "SymmetricTree",
+                            # max_leaves is NOT applicable here
+                        },
+                        {
+                            "boosting_type": "Plain",
+                            "grow_policy": "Depthwise",
+                            # max_leaves is NOT applicable here
+                        },
+                        {
+                            "boosting_type": "Plain",
+                            "grow_policy": "Lossguide",
+                            "max_leaves": hp.quniform("max_leaves", 16, 128, 16), # max_leaves only with Lossguide
+                        },
+                    ]
+                ),
             ]
         ),
         # Step 6: Miscellaneous/Advanced
@@ -91,9 +104,11 @@ def test_catboost_regressor_initialization(catboost_data):
     ]
 
     # Specify integer parameters for CatBoost.
+    # max_leaves is now conditional, but its name remains "max_leaves" when present.
     catboost_int_params = [
-        "iterations", "depth", "max_leaves", "od_wait",
-        "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf"
+        "iterations", "depth", "od_wait",
+        "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf",
+        "max_leaves" # Keep max_leaves here, clean_int_params will handle if it's not present
     ]
 
     optimizer = StepwiseHyperoptOptimizer(
@@ -134,11 +149,17 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "od_wait" in optimizer.best_params_
     assert "border_count" in optimizer.best_params_
     assert "has_time" in optimizer.best_params_
-    assert "max_leaves" in optimizer.best_params_
     assert "max_ctr_complexity" in optimizer.best_params_
     assert "colsample_bylevel" in optimizer.best_params_
     assert "used_ram_limit" in optimizer.best_params_
     assert "objective" in optimizer.best_params_
+
+    # Assert max_leaves only if grow_policy is Lossguide
+    if optimizer.best_params_["grow_policy"] == "Lossguide":
+        assert "max_leaves" in optimizer.best_params_
+        assert isinstance(optimizer.best_params_["max_leaves"], int)
+    else:
+        assert "max_leaves" not in optimizer.best_params_
 
 
     # Assert that if boosting_type is 'Ordered', grow_policy is 'SymmetricTree'
