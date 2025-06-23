@@ -30,10 +30,6 @@ ArrayLike: TypeAlias = numpy.typing.ArrayLike
 class _Fitable(Protocol):
     def fit(self, X: MatrixLike, y: ArrayLike, *args, **kwargs) -> Self: ...
     def predict(self, X: MatrixLike) -> ArrayLike: ...
-    # def set_params(self, **params: dict[str, PARAM]) -> Self:
-    # def set_params(self, **params: Unpack[dict[str, PARAM]]) -> Self:
-    # def set_params(self, **params: Unpack[PARAM]) -> Self:
-    # def set_params(self, **params: **dict) -> Self:
     def set_params(self, **params: PARAM) -> Self: ...
     def score(self, X: MatrixLike, y: ArrayLike) -> float: ...
 
@@ -69,7 +65,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         self.y = y
         for step, param_space in enumerate(self.param_space_sequence):
             print(f"Optimizing step {step + 1}/{len(self.param_space_sequence)}")
-            param_space = self.check_for_param_conflicts(param_space)
+            # Removed check_for_param_conflicts as conditional spaces are best defined by user
             trials = Trials()
             best = fmin(
                 fn=self.objective,
@@ -93,9 +89,6 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         self.model.fit(X, y, *args, **kwargs)
 
         return self
-
-    def check_for_param_conflicts(self, param_space):
-        # AI! implement this
 
     def predict(self, X: pd.DataFrame) -> ArrayLike:
         return self.model.predict(X)

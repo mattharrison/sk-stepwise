@@ -22,6 +22,9 @@ def test_catboost_regressor_initialization(catboost_data):
     # Define Langevin and Posterior Sampling choices separately
     langevin_choice = hp.choice("langevin", [True, False])
 
+    # Define boosting_type as a variable to use in conditional grow_policy
+    boosting_type_choice = hp.choice("boosting_type", ["Ordered", "Plain"])
+
     param_space_sequence = [
         {
             "iterations": hp.quniform("iterations", 10, 100, 10),
@@ -32,7 +35,15 @@ def test_catboost_regressor_initialization(catboost_data):
             "subsample": hp.uniform("subsample", 0.6, 1.0),
             "random_strength": hp.loguniform("random_strength", -2, 1),
             "min_data_in_leaf": hp.quniform("min_data_in_leaf", 1, 20, 1),
-            "grow_policy": hp.choice("grow_policy", ["SymmetricTree", "Depthwise", "Lossguide"]),
+            # Conditional grow_policy: if boosting_type is "Ordered", grow_policy must be "SymmetricTree"
+            "grow_policy": hp.choice(
+                "grow_policy",
+                [
+                    "SymmetricTree",
+                    hp.pchoice(("Depthwise", 0.0) if boosting_type_choice._obj == "Ordered" else ("Depthwise", 1.0)),
+                    hp.pchoice(("Lossguide", 0.0) if boosting_type_choice._obj == "Ordered" else ("Lossguide", 1.0))
+                ]
+            ),
             "nan_mode": hp.choice("nan_mode", ["Forbidden", "Min", "Max"]),
             "one_hot_max_size": hp.quniform("one_hot_max_size", 2, 10, 1),
             "has_time": hp.choice("has_time", [True, False]),
@@ -43,7 +54,7 @@ def test_catboost_regressor_initialization(catboost_data):
             "leaf_estimation_backtracking": hp.choice("leaf_estimation_backtracking", ["No", "AnyImprovement"]),
             "fold_len_multiplier": hp.uniform("fold_len_multiplier", 1.01, 2.0),
             "approx_on_full_history": hp.choice("approx_on_full_history", [True, False]),
-            "boosting_type": hp.choice("boosting_type", ["Ordered", "Plain"]),
+            "boosting_type": boosting_type_choice, # Use the defined choice variable
             "boost_from_average": hp.choice("boost_from_average", [True, False]),
             "langevin": langevin_choice, # Use the defined choice
             "diffusion_temperature": hp.loguniform("diffusion_temperature", 0, 4),
@@ -57,14 +68,21 @@ def test_catboost_regressor_initialization(catboost_data):
         }
     ]
 
+    # Specify integer parameters for CatBoost
+    catboost_int_params = [
+        "iterations", "depth", "min_data_in_leaf", "one_hot_max_size",
+        "fold_permutation_block", "leaf_estimation_iterations"
+    ]
+
     optimizer = StepwiseHyperoptOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
         random_state=42,
+        int_params=catboost_int_params, # Pass CatBoost specific integer parameters
     )
 
-    # This fit is expected to pass after the changes in src/sk_stepwise/__init__.py
+    # This fit is expected to pass now due to the conditional hyperparameter space
     optimizer.fit(X_train, y_train)
 
     assert optimizer.best_params_ is not None
@@ -98,3 +116,7 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "model_shrink_rate" in optimizer.best_params_
     assert "model_shrink_mode" in optimizer.best_params_
     assert optimizer.best_score_ is not None
+
+    # Assert that if boosting_type is 'Ordered', grow_policy is 'SymmetricTree'
+    if optimizer.best_params_["boosting_type"] == "Ordered":
+        assert optimizer.best_params_["grow_policy"] == "SymmetricTree"

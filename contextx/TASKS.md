@@ -4,6 +4,6 @@
     a. [x] Ensuring `CatBoostRegressor` can be passed as the `model` argument.
     b. [x] Handling any `CatBoostRegressor`-specific parameters or behaviors (e.g., `random_state`, `verbose`).
     c. [x] Verifying that `clean_int_params` correctly handles `CatBoostRegressor` integer parameters.
-4. [ ] Address CatBoost hyperparameter conflicts (e.g., "Ordered boosting is not supported for nonsymmetric trees") by modifying the search space in `tests/test_catboost.py`.
+4. [x] Address CatBoost hyperparameter conflicts (e.g., "Ordered boosting is not supported for nonsymmetric trees") by modifying the search space in `tests/test_catboost.py` to use `hyperopt`'s conditional expressions.
 5. [ ] Refactor the code in `src/sk_stepwise/__init__.py` for clarity and maintainability, ensuring all tests still pass.
 6. [ ] Add a test to `test/tests_catboost.py` that verifies `StepwiseHyperoptOptimizer` correctly passes `CatBoostRegressor` specific `fit` arguments (e.g., `cat_features`).
