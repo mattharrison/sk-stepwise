@@ -47,7 +47,6 @@ def test_catboost_regressor_initialization(catboost_data):
                     "grow_policy": "SymmetricTree", # Forced to SymmetricTree for Ordered boosting
                     "iterations": hp.quniform("iterations_ordered", 10, 200, 10),
                     "depth": hp.quniform("depth_ordered", 4, 10, 1),
-                    # max_leaves is NOT applicable here
                 },
                 # Option 2: Plain Boosting (grow_policy can be any)
                 hp.choice(
@@ -58,21 +57,19 @@ def test_catboost_regressor_initialization(catboost_data):
                             "grow_policy": "SymmetricTree",
                             "iterations": hp.quniform("iterations_plain_symmetric", 10, 200, 10),
                             "depth": hp.quniform("depth_plain_symmetric", 4, 10, 1),
-                            # max_leaves is NOT applicable here
                         },
                         {
                             "boosting_type": "Plain",
                             "grow_policy": "Depthwise",
                             "iterations": hp.quniform("iterations_plain_depthwise", 10, 200, 10),
                             "depth": hp.quniform("depth_plain_depthwise", 4, 10, 1),
-                            # max_leaves is NOT applicable here
                         },
                         {
                             "boosting_type": "Plain",
                             "grow_policy": "Lossguide",
                             "iterations": hp.quniform("iterations_plain_lossguide", 10, 200, 10),
                             "depth": hp.quniform("depth_plain_lossguide", 4, 10, 1),
-                            "max_leaves": hp.quniform("max_leaves", 16, 128, 16), # max_leaves only with Lossguide
+                            # Removed "max_leaves" as per request
                         },
                     ]
                 ),
@@ -110,8 +107,9 @@ def test_catboost_regressor_initialization(catboost_data):
     ]
 
     # Specify integer parameters for CatBoost.
+    # Removed "max_leaves" from this list
     catboost_int_params = [
-        "iterations", "depth", "max_leaves", "od_wait",
+        "iterations", "depth", "od_wait",
         "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf"
     ]
 
@@ -171,12 +169,8 @@ def test_catboost_regressor_initialization(catboost_data):
 
     assert "objective" in optimizer.best_params_
 
-    # Assert max_leaves only if grow_policy is Lossguide
-    if optimizer.best_params_["grow_policy"] == "Lossguide":
-        assert "max_leaves" in optimizer.best_params_
-        assert isinstance(optimizer.best_params_["max_leaves"], int)
-    else:
-        assert "max_leaves" not in optimizer.best_params_
+    # Assert max_leaves is NOT present, as it's removed from the space
+    assert "max_leaves" not in optimizer.best_params_
 
 
     # Assert that if boosting_type is 'Ordered', grow_policy is 'SymmetricTree'
