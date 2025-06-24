@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.base import BaseEstimator, MetaEstimatorMixin
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold, check_scoring
 from hyperopt import fmin, tpe, space_eval, Trials
 
 
@@ -34,6 +34,36 @@ class _Fitable(Protocol):
     def score(self, X: MatrixLike, y: ArrayLike) -> float: ...
 
 
+def _custom_cross_val_score(estimator, X, y, cv, scoring, fit_params):
+    """
+    An alternative to sklearn.model_selection.cross_val_score that allows
+    passing fit_params, including eval_set, where eval_set is dynamically
+    created from the validation fold.
+    """
+    cv_splitter = KFold(n_splits=cv, shuffle=True, random_state=42)
+    scores = []
+    scorer = check_scoring(estimator, scoring=scoring)
+
+    for train_idx, val_idx in cv_splitter.split(X, y):
+        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+
+        current_fit_params = fit_params.copy()
+        if 'eval_set' in current_fit_params:
+            # Assuming eval_set is expected as a list of (X, y) tuples
+            # This replaces the placeholder eval_set with the actual validation set
+            current_fit_params['eval_set'] = [(X_val, y_val)]
+
+        # Create a new estimator instance for each fold to avoid data leakage
+        # and ensure parameters are reset.
+        fold_estimator = estimator.__class__(**estimator.get_params())
+        
+        fold_estimator.fit(X_train, y_train, **current_fit_params)
+        score = scorer(fold_estimator, X_val, y_val)
+        scores.append(score)
+    return np.array(scores)
+
+
 @dataclass
 class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     model: _Fitable
@@ -47,6 +77,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     # New field to specify which parameters should be integers
     int_params: list[str] = field(default_factory=list)
     debug: bool = False
+    _fit_params: dict = field(default_factory=dict) # To store fit_params passed to .fit()
 
     def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
         # Use the instance's int_params list
@@ -58,21 +89,23 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         if self.debug:
             print(f'debug: {current_params=}')
 
-        # Removed CatBoost specific conditional parameter handling from here.
-        # This logic should be handled by the hyperopt search space definition itself.
-
         self.model.set_params(**current_params)
-        score = cross_val_score(
-            self.model, self.X, self.y, cv=self.cv, scoring=self.scoring, n_jobs=-1
+        
+        # Use the custom cross_val_score that handles fit_params
+        score = _custom_cross_val_score(
+            self.model, self.X, self.y, cv=self.cv, scoring=self.scoring, fit_params=self._fit_params
         )
         return -np.mean(score)
 
     def fit(self, X: pd.DataFrame, y: pd.Series, *args, **kwargs) -> Self:
         self.X = X
         self.y = y
+        # Store fit_params for use in the objective function
+        # Convert args to kwargs if necessary, though typically fit_params are kwargs
+        self._fit_params = kwargs 
+
         for step, param_space in enumerate(self.param_space_sequence):
             print(f"Optimizing step {step + 1}/{len(self.param_space_sequence)}")
-            # Removed check_for_param_conflicts as conditional spaces are best defined by user
             trials = Trials()
             best = fmin(
                 fn=self.objective,
@@ -80,7 +113,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
                 algo=tpe.suggest,
                 max_evals=self.max_evals_per_step,
                 trials=trials,
-                # rstate=np.random.RandomState(self.random_state)
+                # rstate=np.random.RandomState(self.random_state) # Hyperopt handles random state internally
             )
 
             step_best_params = space_eval(param_space, best)
@@ -93,9 +126,9 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
 
         if self.debug:
             print(f'{kwargs=}')
-        # Fit the model with the best parameters
+        # Fit the model with the best parameters on the full dataset
         self.model.set_params(**self.best_params_)
-        self.model.fit(X, y, *args, **kwargs)
+        self.model.fit(X, y, *args, **kwargs) # Pass original args/kwargs for final fit
 
         return self
 
