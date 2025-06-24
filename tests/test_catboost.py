@@ -48,29 +48,43 @@ def test_catboost_regressor_initialization(catboost_data):
                     "depth": hp.quniform("depth_ordered", 4, 10, 1),
                 },
                 # Option 2: Plain Boosting (grow_policy can be any)
-                hp.choice(
-                    "plain_boosting_grow_policy_and_core_params",
-                    [
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "SymmetricTree",
-                            "iterations": hp.quniform("iterations_plain_symmetric", 10, 200, 10),
-                            "depth": hp.quniform("depth_plain_symmetric", 4, 10, 1),
-                        },
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "Depthwise",
-                            "iterations": hp.quniform("iterations_plain_depthwise", 10, 200, 10),
-                            "depth": hp.quniform("depth_plain_depthwise", 4, 10, 1),
-                        },
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "Lossguide",
-                            "iterations": hp.quniform("iterations_plain_lossguide", 10, 200, 10),
-                            "depth": hp.quniform("depth_plain_lossguide", 4, 10, 1),
-                        },
-                    ]
-                ),
+                {
+                    'boosting_type': 'Plain',
+                    'grow_policy': hp.choice(
+                        'grow_policy_plain',
+                        [
+                            'SymmetricTree',
+                            'Depthwise',
+                            'Lossguide'
+                        ]
+                    ),
+                    "iterations": hp.quniform("iterations_plain", 10, 200, 10),
+                    "depth": hp.quniform("depth_plain", 4, 10, 1),
+                },
+
+                # hp.choice(
+                #     "plain_boosting_grow_policy_and_core_params",
+                #     [
+                #         {
+                #             "boosting_type": "Plain",
+                #             "grow_policy": "SymmetricTree",
+                #             "iterations": hp.quniform("iterations_plain_symmetric", 10, 200, 10),
+                #             "depth": hp.quniform("depth_plain_symmetric", 4, 10, 1),
+                #         },
+                #         {
+                #             "boosting_type": "Plain",
+                #             "grow_policy": "Depthwise",
+                #             "iterations": hp.quniform("iterations_plain_depthwise", 10, 200, 10),
+                #             "depth": hp.quniform("depth_plain_depthwise", 4, 10, 1),
+                #         },
+                #         {
+                #             "boosting_type": "Plain",
+                #             "grow_policy": "Lossguide",
+                #             "iterations": hp.quniform("iterations_plain_lossguide", 10, 200, 10),
+                #             "depth": hp.quniform("depth_plain_lossguide", 4, 10, 1),
+                #         },
+                #     ]
+                # ),
             ]
         ),
         # Step 2 (formerly Step 4): Feature Handling

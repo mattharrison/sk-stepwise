@@ -125,34 +125,28 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         Filters CatBoost-specific parameters based on conditional logic.
         For example, 'max_leaves' is only valid with 'Lossguide' grow_policy.
         """
-        filtered_params = params.copy()
-        
-        # Handle max_leaves based on grow_policy (removed from space, but keep filter for robustness)
-        if "max_leaves" in filtered_params:
-            del filtered_params["max_leaves"]
-        
-        # Handle od_pval based on od_type (removed from space, but keep filter for robustness)
-        od_params = filtered_params.get("od_params")
-        if isinstance(od_params, dict):
-            if "od_pval" in od_params:
-                del od_params["od_pval"]
-            # Still flatten od_params if it exists, even if od_pval is removed
-            filtered_params.update(od_params)
-            del filtered_params["od_params"]
-        
-        # Handle od_wait (removed from space, but keep filter for robustness)
-        if "od_wait" in filtered_params:
-            del filtered_params["od_wait"]
-
-        # Handle subsample based on bootstrap_type
-        bootstrap_params = filtered_params.get("bootstrap_params")
-        if isinstance(bootstrap_params, dict):
-            if bootstrap_params.get("bootstrap_type") == "Bayesian" and "subsample" in filtered_params:
-                del filtered_params["subsample"] # Subsample is a top-level param, not in bootstrap_params dict
-            filtered_params.update(bootstrap_params) # Flatten bootstrap_params into main dict
-            del filtered_params["bootstrap_params"] # Remove the nested dict key
-
-        return filtered_params
+        conflicting_params = {
+            # key to keep , key to remove
+            'grow_policy': 'max_leaves',  # max_leaves is only valid for Lossguide
+            'od_type': 'od_pval',  # od_pval is only valid for IncToDec
+            'bootstrap_type': 'subsample',  # subsample is not valid for Bayesian bootstrap
+            'bootstrap_type': 'bagging_temperature'  # bagging_temperature is only valid for Bayesian bootstrap
+            }
+        new_params = {}
+        keys_to_remove = set()
+        for key, value in params.items():
+            key_to_remove = conflicting_params.get(key)
+            if key_to_remove and key_to_remove in params:
+                # If the key is in conflicting_params and exists in params, remove it
+                keys_to_remove.add(key_to_remove)
+            else:
+                # Otherwise, keep the key-value pair
+                new_params[key] = value
+        # Remove all keys that were marked for removal
+        for key in keys_to_remove:
+            if key in new_params:
+                del new_params[key]
+        return new_params
 
 
     def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
@@ -162,20 +156,13 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     def objective(self, params: dict[str, PARAM]) -> float:
         # Flatten the parameters first
         flattened_params = self._flatten_params(params)
-        
-        # Filter CatBoost-specific conditional parameters from the current trial's params
-        filtered_trial_params = self._filter_catboost_params(flattened_params)
 
-        # Combine best_params_ (filtered) with current trial's filtered params
-        # Ensure best_params_ is also filtered based on the current trial's grow_policy
-        # This is crucial to avoid passing invalid combinations from previous steps
-        temp_best_params = self._filter_catboost_params(self.best_params_)
-        
-        current_params = {**temp_best_params, **filtered_trial_params}
+        current_params = {**self.best_params_, **flattened_params}
         
         # Clean integer parameters
         cleaned_params = self.clean_int_params(current_params)
-        
+        cleaned_params = self._filter_catboost_params(cleaned_params)
+
         if self.debug:
             print(f'debug: {cleaned_params=}')
 
