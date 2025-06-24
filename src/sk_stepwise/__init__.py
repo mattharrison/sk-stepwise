@@ -144,11 +144,11 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         if "od_wait" in filtered_params:
             del filtered_params["od_wait"]
 
-        # Handle bagging_temperature based on bootstrap_type
+        # Handle subsample based on bootstrap_type
         bootstrap_params = filtered_params.get("bootstrap_params")
         if isinstance(bootstrap_params, dict):
-            if bootstrap_params.get("bootstrap_type") != "Bayesian" and "bagging_temperature" in bootstrap_params:
-                del bootstrap_params["bagging_temperature"]
+            if bootstrap_params.get("bootstrap_type") == "Bayesian" and "subsample" in filtered_params:
+                del filtered_params["subsample"] # Subsample is a top-level param, not in bootstrap_params dict
             filtered_params.update(bootstrap_params) # Flatten bootstrap_params into main dict
             del filtered_params["bootstrap_params"] # Remove the nested dict key
 
