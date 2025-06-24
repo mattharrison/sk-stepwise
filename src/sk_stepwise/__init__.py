@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.base import BaseEstimator, MetaEstimatorMixin
-from sklearn.model_selection import KFold, check_scoring
+from sklearn.model_selection import KFold
+from sklearn.metrics import check_scoring # Updated import path
 from hyperopt import fmin, tpe, space_eval, Trials
 
 
