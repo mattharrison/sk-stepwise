@@ -21,27 +21,19 @@ def test_catboost_regressor_initialization(catboost_data):
     model = CatBoostRegressor(random_state=42, silent=True)
 
     # Define conditional bootstrap_type and bagging_temperature
-    # Restructured to return a dictionary that includes 'bootstrap_type'
-    # and conditionally includes 'bagging_temperature'.
-    bootstrap_type_choice = hp.choice(
-        "bootstrap_choice",
-        [
-            {"bootstrap_type": "Bayesian", "bagging_temperature": hp.uniform("bagging_temperature", 0.0, 1.0)},
-            {"bootstrap_type": "Bernoulli"},
-            {"bootstrap_type": "MVS"}
-        ]
-    )
+    # These are now directly part of the param_space_sequence structure
+    bootstrap_type_options = [
+        {"bootstrap_type": "Bayesian", "bagging_temperature": hp.uniform("bagging_temperature", 0.0, 1.0)},
+        {"bootstrap_type": "Bernoulli"},
+        {"bootstrap_type": "MVS"}
+    ]
 
     # Define conditional od_type and od_pval
-    # Restructured to return a dictionary that includes 'od_type'
-    # and conditionally includes 'od_pval'.
-    od_type_choice = hp.choice(
-        "od_type_choice",
-        [
-            {"od_type": "IncToDec", "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0))},
-            {"od_type": "Iter"}
-        ]
-    )
+    # These are now directly part of the param_space_sequence structure
+    od_type_options = [
+        {"od_type": "IncToDec", "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0))},
+        {"od_type": "Iter"}
+    ]
 
     # Define param_space_sequence organized into logical steps
     param_space_sequence = [
@@ -98,7 +90,7 @@ def test_catboost_regressor_initialization(catboost_data):
         {
             "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
             "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
-            **od_type_choice, # Use the defined conditional choice
+            "od_params": hp.choice("od_params", od_type_options), # Embed the choice directly
             "od_wait": hp.quniform("od_wait", 10, 50, 5),
         },
         # Step 4 (formerly Step 3): Learning Process & Data Sampling
@@ -106,7 +98,7 @@ def test_catboost_regressor_initialization(catboost_data):
             "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)),
             "subsample": hp.uniform("subsample", 0.6, 1.0),
             "colsample_bylevel": hp.uniform("colsample_bylevel", 0.6, 1.0),
-            **bootstrap_type_choice, # Use the defined conditional choice
+            "bootstrap_params": hp.choice("bootstrap_params", bootstrap_type_options), # Embed the choice directly
         },
         # Step 5 (formerly Step 6): Miscellaneous/Advanced
         {
@@ -149,24 +141,27 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "subsample" in optimizer.best_params_
     assert "colsample_bylevel" in optimizer.best_params_
 
-    assert "bootstrap_type" in optimizer.best_params_
+    # Now, bootstrap_type and od_type are nested under 'bootstrap_params' and 'od_params'
+    assert "bootstrap_params" in optimizer.best_params_
+    assert "bootstrap_type" in optimizer.best_params_["bootstrap_params"]
     
     # Assert bagging_temperature only if bootstrap_type is Bayesian
-    if optimizer.best_params_["bootstrap_type"] == "Bayesian":
-        assert "bagging_temperature" in optimizer.best_params_
+    if optimizer.best_params_["bootstrap_params"]["bootstrap_type"] == "Bayesian":
+        assert "bagging_temperature" in optimizer.best_params_["bootstrap_params"]
     else:
-        assert "bagging_temperature" not in optimizer.best_params_
+        assert "bagging_temperature" not in optimizer.best_params_["bootstrap_params"]
 
     assert "use_best_model" in optimizer.best_params_
     assert "eval_metric" in optimizer.best_params_
-    assert "od_type" in optimizer.best_params_ # od_type will always be present now
+    assert "od_params" in optimizer.best_params_
+    assert "od_type" in optimizer.best_params_["od_params"]
     
     # Assert od_pval only if od_type is IncToDec
-    if optimizer.best_params_["od_type"] == "IncToDec":
-        assert "od_pval" in optimizer.best_params_
-        assert isinstance(optimizer.best_params_["od_pval"], float)
+    if optimizer.best_params_["od_params"]["od_type"] == "IncToDec":
+        assert "od_pval" in optimizer.best_params_["od_params"]
+        assert isinstance(optimizer.best_params_["od_params"]["od_pval"], float)
     else:
-        assert "od_pval" not in optimizer.best_params_
+        assert "od_pval" not in optimizer.best_params_["od_params"]
 
     assert "od_wait" in optimizer.best_params_
     assert "border_count" in optimizer.best_params_

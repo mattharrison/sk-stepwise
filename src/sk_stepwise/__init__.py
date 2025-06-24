@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.base import BaseEstimator, MetaEstimatorMixin
 from sklearn.model_selection import KFold
-from sklearn.metrics import check_scoring # Updated import path
+from sklearn.metrics import check_scoring
 from hyperopt import fmin, tpe, space_eval, Trials
 
 
@@ -105,13 +105,31 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     debug: bool = False
     _fit_params: dict = field(default_factory=dict) # To store fit_params passed to .fit()
 
+    def _flatten_params(self, params: dict) -> dict:
+        """
+        Flattens a nested dictionary of parameters, handling cases where
+        hp.choice selects a dictionary.
+        """
+        flattened = {}
+        for key, value in params.items():
+            if isinstance(value, dict):
+                # If the value is a dictionary (e.g., from hp.choice selecting a dict)
+                # then merge its contents into the flattened dictionary.
+                flattened.update(self._flatten_params(value))
+            else:
+                flattened[key] = value
+        return flattened
+
     def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
         # Use the instance's int_params list
         return {k: int(v) if k in self.int_params else v for k, v in params.items()}
 
     def objective(self, params: dict[str, PARAM]) -> float:
-        params = self.clean_int_params(params)
-        current_params = {**self.best_params_, **params}
+        # Flatten the parameters first, then clean integer parameters
+        flattened_params = self._flatten_params(params)
+        cleaned_params = self.clean_int_params(flattened_params)
+        
+        current_params = {**self.best_params_, **cleaned_params}
         if self.debug:
             print(f'debug: {current_params=}')
 
@@ -143,8 +161,12 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             )
 
             step_best_params = space_eval(param_space, best)
-            step_best_params = self.clean_int_params(step_best_params)
-            self.best_params_.update(step_best_params)
+            
+            # Flatten the step_best_params before updating best_params_
+            flattened_step_best_params = self._flatten_params(step_best_params)
+            cleaned_step_best_params = self.clean_int_params(flattened_step_best_params)
+            
+            self.best_params_.update(cleaned_step_best_params)
             self.best_score_ = -min(trials.losses())
 
             print(f"Best parameters after step {step + 1}: {self.best_params_}")
