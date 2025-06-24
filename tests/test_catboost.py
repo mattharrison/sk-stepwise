@@ -28,12 +28,11 @@ def test_catboost_regressor_initialization(catboost_data):
         {"bootstrap_type": "MVS"}
     ]
 
-    # Define conditional od_type and od_pval
-    # These are now directly part of the param_space_sequence structure
-    od_type_options = [
-        {"od_type": "IncToDec", "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0))},
-        {"od_type": "Iter"}
-    ]
+    # Removed od_type_options as per request
+    # od_type_options = [
+    #     {"od_type": "IncToDec", "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0))},
+    #     {"od_type": "Iter"}
+    # ]
 
     # Define param_space_sequence organized into logical steps
     param_space_sequence = [
@@ -69,7 +68,6 @@ def test_catboost_regressor_initialization(catboost_data):
                             "grow_policy": "Lossguide",
                             "iterations": hp.quniform("iterations_plain_lossguide", 10, 200, 10),
                             "depth": hp.quniform("depth_plain_lossguide", 4, 10, 1),
-                            # Removed "max_leaves" as per request
                         },
                     ]
                 ),
@@ -87,8 +85,9 @@ def test_catboost_regressor_initialization(catboost_data):
         {
             "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
             "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
-            "od_params": hp.choice("od_params", od_type_options), # Embed the choice directly
-            "od_wait": hp.quniform("od_wait", 10, 50, 5),
+            # Removed "od_params" and "od_wait" as per request
+            # "od_params": hp.choice("od_params", od_type_options), # Embed the choice directly
+            # "od_wait": hp.quniform("od_wait", 10, 50, 5),
         },
         # Step 4 (formerly Step 3): Learning Process & Data Sampling
         {
@@ -107,9 +106,9 @@ def test_catboost_regressor_initialization(catboost_data):
     ]
 
     # Specify integer parameters for CatBoost.
-    # Removed "max_leaves" from this list
+    # Removed "max_leaves" and "od_wait" from this list
     catboost_int_params = [
-        "iterations", "depth", "od_wait",
+        "iterations", "depth",
         "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf"
     ]
 
@@ -151,17 +150,19 @@ def test_catboost_regressor_initialization(catboost_data):
 
     assert "use_best_model" in optimizer.best_params_
     assert "eval_metric" in optimizer.best_params_
-    assert "od_params" in optimizer.best_params_
-    assert "od_type" in optimizer.best_params_["od_params"]
     
-    # Assert od_pval only if od_type is IncToDec
-    if optimizer.best_params_["od_params"]["od_type"] == "IncToDec":
-        assert "od_pval" in optimizer.best_params_["od_params"]
-        assert isinstance(optimizer.best_params_["od_params"]["od_pval"], float)
-    else:
-        assert "od_pval" not in optimizer.best_params_["od_params"]
+    # Removed assertions for od_params and od_type
+    assert "od_params" not in optimizer.best_params_
+    # assert "od_type" in optimizer.best_params_["od_params"]
+    
+    # Removed assertions for od_pval
+    # if optimizer.best_params_["od_params"]["od_type"] == "IncToDec":
+    #     assert "od_pval" in optimizer.best_params_["od_params"]
+    #     assert isinstance(optimizer.best_params_["od_params"]["od_pval"], float)
+    # else:
+    #     assert "od_pval" not in optimizer.best_params_["od_params"]
 
-    assert "od_wait" in optimizer.best_params_
+    assert "od_wait" not in optimizer.best_params_ # Assert it's not present
     assert "border_count" in optimizer.best_params_
     assert "has_time" in optimizer.best_params_
     assert "max_ctr_complexity" in optimizer.best_params_

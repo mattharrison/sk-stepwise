@@ -127,18 +127,23 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         """
         filtered_params = params.copy()
         
-        # Handle max_leaves based on grow_policy
-        if filtered_params.get("grow_policy") != "Lossguide" and "max_leaves" in filtered_params:
+        # Handle max_leaves based on grow_policy (removed from space, but keep filter for robustness)
+        if "max_leaves" in filtered_params:
             del filtered_params["max_leaves"]
         
-        # Handle od_pval based on od_type
+        # Handle od_pval based on od_type (removed from space, but keep filter for robustness)
         od_params = filtered_params.get("od_params")
         if isinstance(od_params, dict):
-            if od_params.get("od_type") != "IncToDec" and "od_pval" in od_params:
+            if "od_pval" in od_params:
                 del od_params["od_pval"]
-            filtered_params.update(od_params) # Flatten od_params into main dict
-            del filtered_params["od_params"] # Remove the nested dict key
+            # Still flatten od_params if it exists, even if od_pval is removed
+            filtered_params.update(od_params)
+            del filtered_params["od_params"]
         
+        # Handle od_wait (removed from space, but keep filter for robustness)
+        if "od_wait" in filtered_params:
+            del filtered_params["od_wait"]
+
         # Handle bagging_temperature based on bootstrap_type
         bootstrap_params = filtered_params.get("bootstrap_params")
         if isinstance(bootstrap_params, dict):
