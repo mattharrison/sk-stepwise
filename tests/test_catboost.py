@@ -80,7 +80,9 @@ def test_catboost_regressor_initialization(catboost_data):
                             "grow_policy": "Lossguide",
                             "iterations": hp.quniform("iterations_plain_lossguide", 10, 200, 10),
                             "depth": hp.quniform("depth_plain_lossguide", 4, 10, 1),
+
                            # "max_leaves": hp.quniform("max_leaves", 16, 128, 16), # max_leaves only with Lossguide
+
                         },
                     ]
                 ),
@@ -98,7 +100,9 @@ def test_catboost_regressor_initialization(catboost_data):
         {
             "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
             "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
+
 #            **od_type_choice, # Use the defined conditional choice
+
             "od_wait": hp.quniform("od_wait", 10, 50, 5),
         },
         # Step 4 (formerly Step 3): Learning Process & Data Sampling
@@ -106,14 +110,20 @@ def test_catboost_regressor_initialization(catboost_data):
             "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)),
             "subsample": hp.uniform("subsample", 0.6, 1.0),
             "colsample_bylevel": hp.uniform("colsample_bylevel", 0.6, 1.0),
+
 #            **bootstrap_type_choice, # Use the defined conditional choice
+
+   
+
         },
         # Step 5 (formerly Step 6): Miscellaneous/Advanced
         {
             "use_best_model": hp.choice("use_best_model", [True, False]),
             "eval_metric": hp.choice("eval_metric", ["RMSE", "MAE"]), # Example metrics for regression
             "objective": hp.choice("objective", ["RMSE", "MAE"]), # Objective function
+
         #    "used_ram_limit": hp.choice("used_ram_limit", [None, "1GB", "2GB"]), # Example RAM limit
+
         }
     ]
 
@@ -129,12 +139,14 @@ def test_catboost_regressor_initialization(catboost_data):
         max_evals_per_step=10,
         random_state=42,
         int_params=catboost_int_params,
+
         scoring="neg_root_mean_squared_error", # Appropriate scoring for RMSE loss
         #scoring="root_mean_squared_error", # Appropriate scoring for RMSE loss
         debug=True,
     )
 
     optimizer.fit(X_train, y_train, eval_set=[(X_test, y_test)])
+
 
     assert optimizer.best_params_ is not None
     # Assertions for tuned parameters
@@ -149,6 +161,7 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "grow_policy" in optimizer.best_params_
     assert "subsample" in optimizer.best_params_
     assert "colsample_bylevel" in optimizer.best_params_
+
 #    assert "bootstrap_type" in optimizer.best_params_
     
     # Assert bagging_temperature only if bootstrap_type is Bayesian
@@ -173,6 +186,7 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "has_time" in optimizer.best_params_
     assert "max_ctr_complexity" in optimizer.best_params_
 #    assert "used_ram_limit" in optimizer.best_params_
+
     assert "objective" in optimizer.best_params_
 
     # Assert max_leaves only if grow_policy is Lossguide
