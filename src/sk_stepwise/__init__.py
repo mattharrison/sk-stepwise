@@ -45,9 +45,20 @@ def _custom_cross_val_score(estimator, X, y, cv, scoring, fit_params):
     scores = []
     scorer = check_scoring(estimator, scoring=scoring)
 
-    for train_idx, val_idx in cv_splitter.split(X, y):
-        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+    # Ensure X and y are numpy arrays for consistent indexing, if they are pandas objects
+    if isinstance(X, pd.DataFrame):
+        X_array = X.values
+    else:
+        X_array = X
+    
+    if isinstance(y, pd.Series):
+        y_array = y.values
+    else:
+        y_array = y
+
+    for train_idx, val_idx in cv_splitter.split(X_array, y_array):
+        X_train, X_val = X_array[train_idx], X_array[val_idx]
+        y_train, y_val = y_array[train_idx], y_array[val_idx]
 
         current_fit_params = fit_params.copy()
         if 'eval_set' in current_fit_params:
