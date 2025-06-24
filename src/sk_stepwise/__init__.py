@@ -120,14 +120,49 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
                 flattened[key] = value
         return flattened
 
+    def _filter_catboost_params(self, params: dict) -> dict:
+        """
+        Filters CatBoost-specific parameters based on conditional logic.
+        For example, 'max_leaves' is only valid with 'Lossguide' grow_policy.
+        """
+        filtered_params = params.copy()
+        
+        # Handle max_leaves based on grow_policy
+        if filtered_params.get("grow_policy") != "Lossguide" and "max_leaves" in filtered_params:
+            del filtered_params["max_leaves"]
+        
+        # Handle od_pval based on od_type
+        od_params = filtered_params.get("od_params")
+        if isinstance(od_params, dict):
+            if od_params.get("od_type") != "IncToDec" and "od_pval" in od_params:
+                del od_params["od_pval"]
+            filtered_params.update(od_params) # Flatten od_params into main dict
+            del filtered_params["od_params"] # Remove the nested dict key
+        
+        # Handle bagging_temperature based on bootstrap_type
+        bootstrap_params = filtered_params.get("bootstrap_params")
+        if isinstance(bootstrap_params, dict):
+            if bootstrap_params.get("bootstrap_type") != "Bayesian" and "bagging_temperature" in bootstrap_params:
+                del bootstrap_params["bagging_temperature"]
+            filtered_params.update(bootstrap_params) # Flatten bootstrap_params into main dict
+            del filtered_params["bootstrap_params"] # Remove the nested dict key
+
+        return filtered_params
+
+
     def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
         # Use the instance's int_params list
         return {k: int(v) if k in self.int_params else v for k, v in params.items()}
 
     def objective(self, params: dict[str, PARAM]) -> float:
-        # Flatten the parameters first, then clean integer parameters
+        # Flatten the parameters first
         flattened_params = self._flatten_params(params)
-        cleaned_params = self.clean_int_params(flattened_params)
+        
+        # Filter CatBoost-specific conditional parameters
+        filtered_params = self._filter_catboost_params(flattened_params)
+
+        # Clean integer parameters
+        cleaned_params = self.clean_int_params(filtered_params)
         
         current_params = {**self.best_params_, **cleaned_params}
         if self.debug:
@@ -162,9 +197,14 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
 
             step_best_params = space_eval(param_space, best)
             
-            # Flatten the step_best_params before updating best_params_
+            # Flatten the step_best_params
             flattened_step_best_params = self._flatten_params(step_best_params)
-            cleaned_step_best_params = self.clean_int_params(flattened_step_best_params)
+            
+            # Filter CatBoost-specific conditional parameters for the best_params_
+            filtered_step_best_params = self._filter_catboost_params(flattened_step_best_params)
+
+            # Clean integer parameters
+            cleaned_step_best_params = self.clean_int_params(filtered_step_best_params)
             
             self.best_params_.update(cleaned_step_best_params)
             self.best_score_ = -min(trials.losses())
