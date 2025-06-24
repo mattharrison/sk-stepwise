@@ -46,6 +46,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     best_score_: float = None
     # New field to specify which parameters should be integers
     int_params: list[str] = field(default_factory=list)
+    debug: bool = False
 
     def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
         # Use the instance's int_params list
@@ -54,6 +55,8 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     def objective(self, params: dict[str, PARAM]) -> float:
         params = self.clean_int_params(params)
         current_params = {**self.best_params_, **params}
+        if self.debug:
+            print(f'debug: {current_params=}')
 
         # Removed CatBoost specific conditional parameter handling from here.
         # This logic should be handled by the hyperopt search space definition itself.
@@ -88,6 +91,8 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             print(f"Best parameters after step {step + 1}: {self.best_params_}")
             print(f"Best score after step {step + 1}: {self.best_score_}")
 
+        if self.debug:
+            print(f'{kwargs=}')
         # Fit the model with the best parameters
         self.model.set_params(**self.best_params_)
         self.model.fit(X, y, *args, **kwargs)
