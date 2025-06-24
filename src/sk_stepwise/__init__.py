@@ -158,17 +158,23 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         # Flatten the parameters first
         flattened_params = self._flatten_params(params)
         
-        # Filter CatBoost-specific conditional parameters
-        filtered_params = self._filter_catboost_params(flattened_params)
+        # Filter CatBoost-specific conditional parameters from the current trial's params
+        filtered_trial_params = self._filter_catboost_params(flattened_params)
 
-        # Clean integer parameters
-        cleaned_params = self.clean_int_params(filtered_params)
+        # Combine best_params_ (filtered) with current trial's filtered params
+        # Ensure best_params_ is also filtered based on the current trial's grow_policy
+        # This is crucial to avoid passing invalid combinations from previous steps
+        temp_best_params = self._filter_catboost_params(self.best_params_)
         
-        current_params = {**self.best_params_, **cleaned_params}
+        current_params = {**temp_best_params, **filtered_trial_params}
+        
+        # Clean integer parameters
+        cleaned_params = self.clean_int_params(current_params)
+        
         if self.debug:
-            print(f'debug: {current_params=}')
+            print(f'debug: {cleaned_params=}')
 
-        self.model.set_params(**current_params)
+        self.model.set_params(**cleaned_params)
         
         # Use the custom cross_val_score that handles fit_params
         score = _custom_cross_val_score(
@@ -201,6 +207,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             flattened_step_best_params = self._flatten_params(step_best_params)
             
             # Filter CatBoost-specific conditional parameters for the best_params_
+            # This filtering is crucial before updating self.best_params_
             filtered_step_best_params = self._filter_catboost_params(flattened_step_best_params)
 
             # Clean integer parameters
@@ -215,7 +222,9 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         if self.debug:
             print(f'{kwargs=}')
         # Fit the model with the best parameters on the full dataset
-        self.model.set_params(**self.best_params_)
+        # Ensure final best_params_ are also filtered before setting them on the model
+        final_params_for_model = self._filter_catboost_params(self.best_params_)
+        self.model.set_params(**final_params_for_model)
         self.model.fit(X, y, *args, **kwargs) # Pass original args/kwargs for final fit
 
         return self
