@@ -56,11 +56,20 @@ def _custom_cross_val_score(estimator, X, y, cv, scoring, fit_params):
     else:
         y_array = y
 
+    # Extract sample_weight if present in fit_params, as it needs special handling
+    original_sample_weight = fit_params.pop('sample_weight', None)
+
     for train_idx, val_idx in cv_splitter.split(X_array, y_array):
         X_train, X_val = X_array[train_idx], X_array[val_idx]
         y_train, y_val = y_array[train_idx], y_array[val_idx]
 
-        current_fit_params = fit_params.copy()
+        current_fit_params = fit_params.copy() # Copy the remaining fit_params
+        
+        # Handle sample_weight for the current fold
+        fold_sample_weight = None
+        if original_sample_weight is not None:
+            fold_sample_weight = original_sample_weight[train_idx]
+
         if 'eval_set' in current_fit_params:
             # Assuming eval_set is expected as a list of (X, y) tuples
             # This replaces the placeholder eval_set with the actual validation set
@@ -70,7 +79,12 @@ def _custom_cross_val_score(estimator, X, y, cv, scoring, fit_params):
         # and ensure parameters are reset.
         fold_estimator = estimator.__class__(**estimator.get_params())
         
-        fold_estimator.fit(X_train, y_train, **current_fit_params)
+        # Pass sample_weight explicitly if it exists, otherwise pass other fit_params
+        if fold_sample_weight is not None:
+            fold_estimator.fit(X_train, y_train, sample_weight=fold_sample_weight, **current_fit_params)
+        else:
+            fold_estimator.fit(X_train, y_train, **current_fit_params)
+            
         score = scorer(fold_estimator, X_val, y_val)
         scores.append(score)
     return np.array(scores)
@@ -83,7 +97,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     max_evals_per_step: int = 100
     cv: int = 5
     scoring: str | Callable[[ArrayLike, ArrayLike], float] = "neg_mean_squared_error"
-    random_state: int = 42
+    random_state: int = field(default=42, repr=False) # Make random_state not appear in __repr__
     best_params_: dict[str, PARAM] = field(default_factory=dict)
     best_score_: float = None
     # New field to specify which parameters should be integers
@@ -105,7 +119,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         
         # Use the custom cross_val_score that handles fit_params
         score = _custom_cross_val_score(
-            self.model, self.X, self.y, cv=self.cv, scoring=self.scoring, fit_params=self._fit_params
+            self.model, self.X, self.y, cv=self.cv, scoring=self.scoring, fit_params=self._fit_params.copy() # Pass a copy to avoid modifying original
         )
         return -np.mean(score)
 
@@ -125,7 +139,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
                 algo=tpe.suggest,
                 max_evals=self.max_evals_per_step,
                 trials=trials,
-                # rstate=np.random.RandomState(self.random_state) # Hyperopt handles random state internally
+                rstate=np.random.default_rng(self.random_state) # Use default_rng for modern numpy random state
             )
 
             step_best_params = space_eval(param_space, best)
