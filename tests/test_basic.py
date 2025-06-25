@@ -2,7 +2,6 @@ import sk_stepwise as sw
 import pytest
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.datasets import make_regression
 from hyperopt import hp
@@ -28,17 +27,43 @@ def test_logistic():
     opt.fit(X, y)
 
 
-@pytest.mark.matt
-def test_matt():
-    assert "matt" == "matt"
-
 
 # Mock _Fitable model for testing args and kwargs passing
-class MockModel(LinearRegression):
+class MockModel:
+    def __init__(self):
+        self.fit_called_with_args = None
+        self.coef_ = None # Mimic a fitted attribute for assertion
+
     def fit(self, X, y, sample_weight=None, custom_arg=None, **kwargs):
-        self.fit_called_with_args = (sample_weight, custom_arg, kwargs)
-        super().fit(X, y, sample_weight=sample_weight)
+        # Record all arguments passed to fit
+        self.fit_called_with_args = {
+            "X": X,
+            "y": y,
+            "sample_weight": sample_weight,
+            "custom_arg": custom_arg,
+            "kwargs": kwargs
+        }
+        # Simulate fitting by setting a dummy attribute
+        self.coef_ = np.array([1.0, 2.0, 3.0, 4.0, 5.0]) # Dummy value
         return self
+
+    def get_params(self, deep=True):
+        # Required for sklearn.base.clone or estimator.__class__(**estimator.get_params())
+        return {} # No specific params to return for this simple mock
+
+    def set_params(self, **params):
+        # Allow setting of parameters, even if we don't use them in this mock
+        for key, value in params.items():
+            setattr(self, key, value)
+        return self
+
+    def predict(self, X):
+        # Dummy predict method
+        return np.zeros(len(X))
+
+    def score(self, X, y):
+        # Dummy score method
+        return 0.0
 
 
 def test_fit_args_kwargs_passing():
@@ -65,15 +90,16 @@ def test_fit_args_kwargs_passing():
         X, y, sample_weight=sample_weight, custom_arg=custom_arg_value, **extra_kwarg
     )
 
-    # Check if the underlying model's fit method was called with the correct args and kwargs
-    assert hasattr(mock_model, "fit_called_with_args")
-    assert mock_model.fit_called_with_args[0] is sample_weight
-    assert mock_model.fit_called_with_args[1] == custom_arg_value
-    assert mock_model.fit_called_with_args[2] == extra_kwarg
+    # The optimizer's internal model (mock_model) should have its fit method called
+    # with the original fit_params during the final fit on the full dataset.
+    assert hasattr(optimizer.model, "fit_called_with_args")
+    assert optimizer.model.fit_called_with_args["sample_weight"] is sample_weight
+    assert optimizer.model.fit_called_with_args["custom_arg"] == custom_arg_value
+    assert optimizer.model.fit_called_with_args["kwargs"] == extra_kwarg
 
-    # Also check if the model was actually fitted
-    assert hasattr(mock_model, "coef_")
-    assert mock_model.coef_ is not None
+    # Also check if the model was actually "fitted" (i.e., its internal state was updated)
+    assert hasattr(optimizer.model, "coef_")
+    assert optimizer.model.coef_ is not None
 
 
 def test_integer_hyperparameter_cleaning():

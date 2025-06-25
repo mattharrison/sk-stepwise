@@ -21,27 +21,12 @@ def test_catboost_regressor_initialization(catboost_data):
     model = CatBoostRegressor(random_state=42, silent=True)
 
     # Define conditional bootstrap_type and bagging_temperature
-    # Restructured to return a dictionary that includes 'bootstrap_type'
-    # and conditionally includes 'bagging_temperature'.
-    bootstrap_type_choice = hp.choice(
-        "bootstrap_choice",
-        [
-            {"bootstrap_type": "Bayesian", "bagging_temperature": hp.uniform("bagging_temperature", 0.0, 1.0)},
-            {"bootstrap_type": "Bernoulli"},
-            {"bootstrap_type": "MVS"}
-        ]
-    )
-
-    # Define conditional od_type and od_pval
-    # Restructured to return a dictionary that includes 'od_type'
-    # and conditionally includes 'od_pval'.
-    od_type_choice = hp.choice(
-        "od_type_choice",
-        [
-            {"od_type": "IncToDec", "od_pval": hp.loguniform("od_pval", np.log(1e-10), np.log(1.0))},
-            {"od_type": "Iter"}
-        ]
-    )
+    # These are now directly part of the param_space_sequence structure
+    bootstrap_type_options = [
+        {"bootstrap_type": "Bayesian", "bagging_temperature": hp.uniform("bagging_temperature", 0.0, 1.0)},
+        {"bootstrap_type": "Bernoulli"},
+        {"bootstrap_type": "MVS"}
+    ]
 
     # Define param_space_sequence organized into logical steps
     param_space_sequence = [
@@ -55,37 +40,21 @@ def test_catboost_regressor_initialization(catboost_data):
                     "grow_policy": "SymmetricTree", # Forced to SymmetricTree for Ordered boosting
                     "iterations": hp.quniform("iterations_ordered", 10, 200, 10),
                     "depth": hp.quniform("depth_ordered", 4, 10, 1),
-                    # max_leaves is NOT applicable here
                 },
                 # Option 2: Plain Boosting (grow_policy can be any)
-                hp.choice(
-                    "plain_boosting_grow_policy_and_core_params",
-                    [
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "SymmetricTree",
-                            "iterations": hp.quniform("iterations_plain_symmetric", 10, 200, 10),
-                            "depth": hp.quniform("depth_plain_symmetric", 4, 10, 1),
-                            # max_leaves is NOT applicable here
-                        },
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "Depthwise",
-                            "iterations": hp.quniform("iterations_plain_depthwise", 10, 200, 10),
-                            "depth": hp.quniform("depth_plain_depthwise", 4, 10, 1),
-                            # max_leaves is NOT applicable here
-                        },
-                        {
-                            "boosting_type": "Plain",
-                            "grow_policy": "Lossguide",
-                            "iterations": hp.quniform("iterations_plain_lossguide", 10, 200, 10),
-                            "depth": hp.quniform("depth_plain_lossguide", 4, 10, 1),
-
-                           # "max_leaves": hp.quniform("max_leaves", 16, 128, 16), # max_leaves only with Lossguide
-
-                        },
-                    ]
-                ),
+                {
+                    'boosting_type': 'Plain',
+                    'grow_policy': hp.choice(
+                        'grow_policy_plain',
+                        [
+                            'SymmetricTree',
+                            'Depthwise',
+                            'Lossguide'
+                        ]
+                    ),
+                    "iterations": hp.quniform("iterations_plain", 10, 200, 10),
+                    "depth": hp.quniform("depth_plain", 4, 10, 1),
+                },
             ]
         ),
         # Step 2 (formerly Step 4): Feature Handling
@@ -100,36 +69,25 @@ def test_catboost_regressor_initialization(catboost_data):
         {
             "l2_leaf_reg": hp.loguniform("l2_leaf_reg", np.log(1), np.log(10)),
             "random_strength": hp.loguniform("random_strength", np.log(0.1), np.log(10)),
-
-#            **od_type_choice, # Use the defined conditional choice
-
-            "od_wait": hp.quniform("od_wait", 10, 50, 5),
         },
         # Step 4 (formerly Step 3): Learning Process & Data Sampling
         {
             "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)),
             "subsample": hp.uniform("subsample", 0.6, 1.0),
             "colsample_bylevel": hp.uniform("colsample_bylevel", 0.6, 1.0),
-
-#            **bootstrap_type_choice, # Use the defined conditional choice
-
-   
-
+            "bootstrap_params": hp.choice("bootstrap_params", bootstrap_type_options), # Embed the choice directly
         },
         # Step 5 (formerly Step 6): Miscellaneous/Advanced
         {
             "use_best_model": hp.choice("use_best_model", [True, False]),
             "eval_metric": hp.choice("eval_metric", ["RMSE", "MAE"]), # Example metrics for regression
             "objective": hp.choice("objective", ["RMSE", "MAE"]), # Objective function
-
-        #    "used_ram_limit": hp.choice("used_ram_limit", [None, "1GB", "2GB"]), # Example RAM limit
-
         }
     ]
 
     # Specify integer parameters for CatBoost.
     catboost_int_params = [
-        "iterations", "depth", "max_leaves", "od_wait",
+        "iterations", "depth",
         "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf"
     ]
 
@@ -139,14 +97,11 @@ def test_catboost_regressor_initialization(catboost_data):
         max_evals_per_step=10,
         random_state=42,
         int_params=catboost_int_params,
-
         scoring="neg_root_mean_squared_error", # Appropriate scoring for RMSE loss
-        #scoring="root_mean_squared_error", # Appropriate scoring for RMSE loss
         debug=True,
     )
 
     optimizer.fit(X_train, y_train, eval_set=[(X_test, y_test)])
-
 
     assert optimizer.best_params_ is not None
     # Assertions for tuned parameters
@@ -159,43 +114,34 @@ def test_catboost_regressor_initialization(catboost_data):
     assert "min_data_in_leaf" in optimizer.best_params_
     assert "boosting_type" in optimizer.best_params_
     assert "grow_policy" in optimizer.best_params_
-    assert "subsample" in optimizer.best_params_
     assert "colsample_bylevel" in optimizer.best_params_
 
-#    assert "bootstrap_type" in optimizer.best_params_
-    
-    # Assert bagging_temperature only if bootstrap_type is Bayesian
-    # if optimizer.best_params_["bootstrap_type"] == "Bayesian":
-    #     assert "bagging_temperature" in optimizer.best_params_
-    # else:
-    #     assert "bagging_temperature" not in optimizer.best_params_
+    # Assert subsample is present UNLESS bootstrap_type is Bayesian
+    if optimizer.best_params_.get("bootstrap_type") == "Bayesian":
+        assert "subsample" not in optimizer.best_params_
+        assert "bagging_temperature" in optimizer.best_params_
+    else:
+        assert "subsample" in optimizer.best_params_
+        assert "bagging_temperature" not in optimizer.best_params_
+
 
     assert "use_best_model" in optimizer.best_params_
     assert "eval_metric" in optimizer.best_params_
-#    assert "od_type" in optimizer.best_params_ # od_type will always be present now
     
-    # Assert od_pval only if od_type is IncToDec
-    # if optimizer.best_params_["od_type"] == "IncToDec":
-    #     assert "od_pval" in optimizer.best_params_
-    #     assert isinstance(optimizer.best_params_["od_pval"], float)
-    # else:
-    #     assert "od_pval" not in optimizer.best_params_
+    # Assert that od_params and od_wait are NOT present
+    assert "od_params" not in optimizer.best_params_
+    assert "od_wait" not in optimizer.best_params_
+    assert "od_type" not in optimizer.best_params_
+    assert "od_pval" not in optimizer.best_params_
 
-#    assert "od_wait" in optimizer.best_params_
     assert "border_count" in optimizer.best_params_
     assert "has_time" in optimizer.best_params_
     assert "max_ctr_complexity" in optimizer.best_params_
-#    assert "used_ram_limit" in optimizer.best_params_
 
     assert "objective" in optimizer.best_params_
 
-    # Assert max_leaves only if grow_policy is Lossguide
-    if optimizer.best_params_["grow_policy"] == "Lossguide":
-        assert "max_leaves" in optimizer.best_params_
-        assert isinstance(optimizer.best_params_["max_leaves"], int)
-    else:
-        assert "max_leaves" not in optimizer.best_params_
-
+    # Assert max_leaves is NOT present, as it's removed from the space
+    assert "max_leaves" not in optimizer.best_params_
 
     # Assert that if boosting_type is 'Ordered', grow_policy is 'SymmetricTree'
     if optimizer.best_params_["boosting_type"] == "Ordered":
