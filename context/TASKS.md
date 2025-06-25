@@ -35,5 +35,5 @@ This document outlines the tasks required to address the failing tests identifie
 
 ## 3. General Improvements
 
--   [ ] 3.1. Review the `_custom_cross_val_score` function to ensure it correctly handles and propagates all `fit_params` to the underlying estimator's `fit` method during cross-validation. (This was largely addressed during the `sample_weight` fix).
--   [ ] 3.2. Ensure that the `StepwiseHyperoptOptimizer` correctly passes `fit_params` from its `fit` method to the `objective` function and subsequently to `_custom_cross_val_score`. (This was addressed during the `sample_weight` fix).
+-   [x] 3.1. Review the `_custom_cross_val_score` function to ensure it correctly handles and propagates all `fit_params` to the underlying estimator's `fit` method during cross-validation. (This was largely addressed during the `sample_weight` fix).
+-   [x] 3.2. Ensure that the `StepwiseHyperoptOptimizer` correctly passes `fit_params` from its `fit` method to the `objective` function and subsequently to `_custom_cross_val_score`. (This was addressed during the `sample_weight` fix).
