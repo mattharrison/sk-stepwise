@@ -2,7 +2,6 @@ import sk_stepwise as sw
 import pytest
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.datasets import make_regression
 from hyperopt import hp
@@ -27,10 +26,6 @@ def test_logistic():
     y = [1, 0]
     opt.fit(X, y)
 
-
-@pytest.mark.matt
-def test_matt():
-    assert "matt" == "matt"
 
 
 # Mock _Fitable model for testing args and kwargs passing

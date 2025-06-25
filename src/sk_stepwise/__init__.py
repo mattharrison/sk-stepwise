@@ -125,27 +125,27 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         Filters CatBoost-specific parameters based on conditional logic.
         This function assumes params is already flattened.
         """
-        filtered_params = params.copy()
-        
-        # Rule 1: max_leaves option works only with lossguide tree growing
-        if filtered_params.get("grow_policy") != "Lossguide" and "max_leaves" in filtered_params:
-            del filtered_params["max_leaves"]
-        
-        # Rule 2: Auto-stop PValue is not a valid parameter for Iter overfitting detector.
-        # (od_params and od_wait are removed from space, but keeping this logic for robustness)
-        if filtered_params.get("od_type") == "Iter" and "od_pval" in filtered_params:
-            del filtered_params["od_pval"]
+        #filtered_params = params.copy()
 
-        # Rule 3: Bayesian bootstrap doesn't support 'subsample' option
-        if filtered_params.get("bootstrap_type") == "Bayesian" and "subsample" in filtered_params:
-            del filtered_params["subsample"]
-        
-        # Rule 4: bagging_temperature is only valid for Bayesian bootstrap
-        if filtered_params.get("bootstrap_type") != "Bayesian" and "bagging_temperature" in filtered_params:
-            del filtered_params["bagging_temperature"]
+        conflicting_keys = [
+            # (key,value): remove_key
+            ('grow_policy', 'Lossguide', 'max_leaves'),  # max_leaves is only valid for Lossguide
+            ('od_type', 'IncToDec', 'od_pval'),  # od_pval is only valid for IncToDec
+            ('bootstrap_type', 'Bayesian', 'bagging_temperature'),  # bagging_temperature is only valid for Bayesian bootstrap
+            ('bootstrap_type', 'Subsample', 'subsample'),  # subsample is not valid for Bayesian bootstrap
+            ('bootstrap_type', 'Bayesian', 'subsample'),  # subsample is not valid for Bayesian bootstrap
+            ('bootstrap_type', 'Bayesian', 'bagging_temperature')  # bagging_temperature is only valid for Bayesian bootstrap
+        ]
 
-        return filtered_params
-
+        for k, v, remove in conflicting_keys:
+            if params.get(k) == v and remove in params:
+                if self.debug:
+                    print(f'debug: Removing {remove} because {k} is {v}')
+                # If the key is in conflicting_params and exists in params, remove it
+                del params[remove]
+        if self.debug:
+            print(f'debug cb: {params=}')
+        return params
 
     def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
         # Use the instance's int_params list
@@ -168,6 +168,9 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         if self.debug:
             print(f'debug: {cleaned_params=}')
 
+        # clear out previous parameters - otherwise models like CatBoost will
+        # complain when we set a conflicting parameter
+        self.model = self.model.__class__()
         self.model.set_params(**cleaned_params)
         
         # Use the custom cross_val_score that handles fit_params
