@@ -4,41 +4,41 @@ This document outlines tasks to verify that the `StepwiseHyperoptOptimizer` corr
 
 ## 1. Understand Current Logic
 
--   [ ] **1.1. Review `StepwiseHyperoptOptimizer.objective`**:
-    -   [ ] 1.1.1. Confirm that the `objective` function returns `-np.mean(score)`. This negates the score, effectively turning a maximization problem into a minimization problem for `hyperopt`.
-    -   [ ] 1.1.2. Verify that `self.best_score_` is set to `-min(trials.losses())` after `fmin` completes. This should convert the minimized (negated) loss back to the original scale of the metric.
+-   [x] **1.1. Review `StepwiseHyperoptOptimizer.objective`**:
+    -   [x] 1.1.1. Confirm that the `objective` function returns `-np.mean(score)`. This negates the score, effectively turning a maximization problem into a minimization problem for `hyperopt`.
+    -   [x] 1.1.2. Verify that `self.best_score_` is set to `-min(trials.losses())` after `fmin` completes. This should convert the minimized (negated) loss back to the original scale of the metric.
 
--   [ ] **1.2. Review `_custom_cross_val_score`**:
-    -   [ ] 1.2.1. Confirm that `check_scoring` correctly retrieves the scorer based on `self.scoring`.
-    -   [ ] 1.2.2. Understand how `scorer(fold_estimator, X_val, y_val)` behaves for different `scoring` strings (e.g., "accuracy", "neg_mean_squared_error").
+-   [x] **1.2. Review `_custom_cross_val_score`**:
+    -   [x] 1.2.1. Confirm that `check_scoring` correctly retrieves the scorer based on `self.scoring`.
+    -   [x] 1.2.2. Understand how `scorer(fold_estimator, X_val, y_val)` behaves for different `scoring` strings (e.g., "accuracy", "neg_mean_squared_error").
 
 ## 2. Test Cases for Maximization Metrics
 
--   [ ] **2.1. Add a new test for a classification model with "accuracy" scoring**:
-    -   [ ] 2.1.1. Create a simple classification dataset (e.g., using `make_classification`).
-    -   [ ] 2.1.2. Initialize `StepwiseHyperoptOptimizer` with a classification model (e.g., `LogisticRegression`, `SVC`) and `scoring="accuracy"`.
-    -   [ ] 2.1.3. Define a simple `param_space_sequence`.
-    -   [ ] 2.1.4. Run `optimizer.fit(X, y)`.
-    -   [ ] 2.1.5. Assert that `optimizer.best_score_` is positive and represents a reasonable accuracy score (e.g., > 0.5 for a binary classification).
+-   [x] **2.1. Add a new test for a classification model with "accuracy" scoring**:
+    -   [x] 2.1.1. Create a simple classification dataset (e.g., using `make_classification`).
+    -   [x] 2.1.2. Initialize `StepwiseHyperoptOptimizer` with a classification model (e.g., `LogisticRegression`, `SVC`) and `scoring="accuracy"`.
+    -   [x] 2.1.3. Define a simple `param_space_sequence`.
+    -   [x] 2.1.4. Run `optimizer.fit(X, y)`.
+    -   [x] 2.1.5. Assert that `optimizer.best_score_` is positive and represents a reasonable accuracy score (e.g., > 0.5 for a binary classification).
     -   [ ] 2.1.6. (Optional) Manually calculate the accuracy for `optimizer.best_params_` to cross-verify.
 
--   [ ] **2.2. Add a new test for a classification model with "roc_auc" scoring**:
-    -   [ ] 2.2.1. Use a classification dataset suitable for ROC AUC.
-    -   [ ] 2.2.2. Initialize `StepwiseHyperoptOptimizer` with `scoring="roc_auc"`.
-    -   [ ] 2.2.3. Run `optimizer.fit(X, y)`.
-    -   [ ] 2.2.4. Assert that `optimizer.best_score_` is between 0 and 1, and ideally > 0.5.
+-   [x] **2.2. Add a new test for a classification model with "roc_auc" scoring**:
+    -   [x] 2.2.1. Use a classification dataset suitable for ROC AUC.
+    -   [x] 2.2.2. Initialize `StepwiseHyperoptOptimizer` with `scoring="roc_auc"`.
+    -   [x] 2.2.3. Run `optimizer.fit(X, y)`.
+    -   [x] 2.2.4. Assert that `optimizer.best_score_` is between 0 and 1, and ideally > 0.5.
 
--   [ ] **2.3. Add a new test for a regression model with "r2" scoring**:
-    -   [ ] 2.3.1. Use a regression dataset (e.g., `make_regression`).
-    -   [ ] 2.3.2. Initialize `StepwiseHyperoptOptimizer` with a regression model and `scoring="r2"`.
-    -   [ ] 2.3.3. Run `optimizer.fit(X, y)`.
-    -   [ ] 2.3.4. Assert that `optimizer.best_score_` is a reasonable R2 score (e.g., positive, ideally close to 1).
+-   [x] **2.3. Add a new test for a regression model with "r2" scoring**:
+    -   [x] 2.3.1. Use a regression dataset (e.g., `make_regression`).
+    -   [x] 2.3.2. Initialize `StepwiseHyperoptOptimizer` with a regression model and `scoring="r2"`.
+    -   [x] 2.3.3. Run `optimizer.fit(X, y)`.
+    -   [x] 2.3.4. Assert that `optimizer.best_score_` is a reasonable R2 score (e.g., positive, ideally close to 1).
 
 ## 3. Test Cases for Minimization Metrics
 
--   [ ] **3.1. Verify existing "neg_mean_squared_error" behavior**:
-    -   [ ] 3.1.1. Review `test_integer_hyperparameter_cleaning` and `test_fit_args_kwargs_passing` to ensure they implicitly test `neg_mean_squared_error` (the default).
-    -   [ ] 3.1.2. Confirm that `optimizer.best_score_` is negative, as expected for a negated error metric.
+-   [x] **3.1. Verify existing "neg_mean_squared_error" behavior**:
+    -   [x] 3.1.1. Review `test_integer_hyperparameter_cleaning` and `test_fit_args_kwargs_passing` to ensure they implicitly test `neg_mean_squared_error` (the default).
+    -   [x] 3.1.2. Confirm that `optimizer.best_score_` is negative, as expected for a negated error metric.
 
 -   [ ] **3.2. Add a new test for "mean_squared_error" (or similar direct error metric)**:
     -   [ ] 3.2.1. Create a regression dataset.

@@ -3,9 +3,10 @@ import pytest
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.datasets import make_regression
+from sklearn.datasets import make_regression, make_classification
 from hyperopt import hp
 from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression, LinearRegression
 
 
 def test_initialization():
@@ -221,3 +222,114 @@ def test_svm_conditional_hyperparameters():
     assert optimizer.best_score_ is not None
     assert optimizer.best_score_ > 0 # Score should be positive for accuracy
 
+
+def test_maximization_metric_accuracy():
+    # 2.1. Add a new test for a classification model with "accuracy" scoring
+    X, y = make_classification(n_samples=100, n_features=5, n_informative=3, n_classes=2, random_state=42)
+    X = pd.DataFrame(X)
+    y = pd.Series(y)
+
+    model = LogisticRegression(random_state=42, solver='liblinear')
+    param_space_sequence = [
+        {"C": hp.loguniform("C", np.log(0.01), np.log(100))}
+    ]
+
+    optimizer = sw.StepwiseHyperoptOptimizer(
+        model=model,
+        param_space_sequence=param_space_sequence,
+        max_evals_per_step=5,
+        random_state=42,
+        scoring="accuracy"
+    )
+
+    optimizer.fit(X, y)
+
+    # 2.1.5. Assert that optimizer.best_score_ is positive and represents a reasonable accuracy score
+    assert optimizer.best_score_ is not None
+    assert optimizer.best_score_ > 0.5 # Accuracy should be better than random for a simple model
+    assert optimizer.best_score_ <= 1.0 # Accuracy cannot exceed 1.0
+
+
+def test_maximization_metric_roc_auc():
+    # 2.2. Add a new test for a classification model with "roc_auc" scoring
+    X, y = make_classification(n_samples=100, n_features=5, n_informative=3, n_classes=2, random_state=42)
+    X = pd.DataFrame(X)
+    y = pd.Series(y)
+
+    model = LogisticRegression(random_state=42, solver='liblinear')
+    param_space_sequence = [
+        {"C": hp.loguniform("C", np.log(0.01), np.log(100))}
+    ]
+
+    optimizer = sw.StepwiseHyperoptOptimizer(
+        model=model,
+        param_space_sequence=param_space_sequence,
+        max_evals_per_step=5,
+        random_state=42,
+        scoring="roc_auc" # For binary classification, roc_auc is a valid scoring
+    )
+
+    optimizer.fit(X, y)
+
+    # 2.2.4. Assert that optimizer.best_score_ is between 0 and 1, and ideally > 0.5.
+    assert optimizer.best_score_ is not None
+    assert 0.0 <= optimizer.best_score_ <= 1.0
+    assert optimizer.best_score_ > 0.5 # ROC AUC should be better than random
+
+
+def test_maximization_metric_r2():
+    # 2.3. Add a new test for a regression model with "r2" scoring
+    X, y = make_regression(n_samples=100, n_features=5, n_informative=3, random_state=42)
+    X = pd.DataFrame(X)
+    y = pd.Series(y)
+
+    model = LinearRegression()
+    param_space_sequence = [
+        {"fit_intercept": hp.choice("fit_intercept", [True, False])}
+    ]
+
+    optimizer = sw.StepwiseHyperoptOptimizer(
+        model=model,
+        param_space_sequence=param_space_sequence,
+        max_evals_per_step=5,
+        random_state=42,
+        scoring="r2"
+    )
+
+    optimizer.fit(X, y)
+
+    # 2.3.4. Assert that optimizer.best_score_ is a reasonable R2 score (e.g., positive, ideally close to 1).
+    assert optimizer.best_score_ is not None
+    # R2 can be negative if the model is worse than a constant model, but for a simple linear regression
+    # on a generated dataset, it should be positive.
+    assert optimizer.best_score_ > -1.0 # R2 can be negative, but usually not extremely so for a decent model
+    assert optimizer.best_score_ <= 1.0 # R2 cannot exceed 1.0
+    # For a well-behaved dataset and model, expect a positive R2
+    assert optimizer.best_score_ > 0.0
+
+
+def test_minimization_metric_neg_mean_squared_error():
+    # 3.1. Verify existing "neg_mean_squared_error" behavior
+    X, y = make_regression(n_samples=100, n_features=5, random_state=42)
+    X = pd.DataFrame(X)
+    y = pd.Series(y)
+
+    model = LinearRegression()
+    param_space_sequence = [
+        {"fit_intercept": hp.choice("fit_intercept", [True, False])}
+    ]
+
+    optimizer = sw.StepwiseHyperoptOptimizer(
+        model=model,
+        param_space_sequence=param_space_sequence,
+        max_evals_per_step=5,
+        random_state=42,
+        scoring="neg_mean_squared_error" # This is the default, but explicitly set for clarity
+    )
+
+    optimizer.fit(X, y)
+
+    # 3.1.2. Confirm that optimizer.best_score_ is negative, as expected for a negated error metric.
+    assert optimizer.best_score_ is not None
+    assert optimizer.best_score_ < 0 # Negated MSE should be negative
+    # The closer to 0, the better the score (less negative)
