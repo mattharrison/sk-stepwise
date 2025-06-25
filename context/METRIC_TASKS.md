@@ -20,19 +20,7 @@ This document outlines tasks to verify that the `StepwiseHyperoptOptimizer` corr
     -   [x] 2.1.3. Define a simple `param_space_sequence`.
     -   [x] 2.1.4. Run `optimizer.fit(X, y)`.
     -   [x] 2.1.5. Assert that `optimizer.best_score_` is positive and represents a reasonable accuracy score (e.g., > 0.5 for a binary classification).
-    -   [ ] 2.1.6. (Optional) Manually calculate the accuracy for `optimizer.best_params_` to cross-verify.
-
--   [x] **2.2. Add a new test for a classification model with "roc_auc" scoring**:
-    -   [x] 2.2.1. Use a classification dataset suitable for ROC AUC.
-    -   [x] 2.2.2. Initialize `StepwiseHyperoptOptimizer` with `scoring="roc_auc"`.
-    -   [x] 2.2.3. Run `optimizer.fit(X, y)`.
-    -   [x] 2.2.4. Assert that `optimizer.best_score_` is between 0 and 1, and ideally > 0.5.
-
--   [x] **2.3. Add a new test for a regression model with "r2" scoring**:
-    -   [x] 2.3.1. Use a regression dataset (e.g., `make_regression`).
-    -   [x] 2.3.2. Initialize `StepwiseHyperoptOptimizer` with a regression model and `scoring="r2"`.
-    -   [x] 2.3.3. Run `optimizer.fit(X, y)`.
-    -   [x] 2.3.4. Assert that `optimizer.best_score_` is a reasonable R2 score (e.g., positive, ideally close to 1).
+    -   [x] 2.1.6. (Optional) Manually calculate the accuracy for `optimizer.best_params_` to cross-verify.
 
 ## 3. Test Cases for Minimization Metrics
 
@@ -40,16 +28,16 @@ This document outlines tasks to verify that the `StepwiseHyperoptOptimizer` corr
     -   [x] 3.1.1. Review `test_integer_hyperparameter_cleaning` and `test_fit_args_kwargs_passing` to ensure they implicitly test `neg_mean_squared_error` (the default).
     -   [x] 3.1.2. Confirm that `optimizer.best_score_` is negative, as expected for a negated error metric.
 
--   [ ] **3.2. Add a new test for "mean_squared_error" (or similar direct error metric)**:
-    -   [ ] 3.2.1. Create a regression dataset.
-    -   [ ] 3.2.2. Initialize `StepwiseHyperoptOptimizer` with `scoring="neg_mean_squared_error"`. (Note: `sklearn`'s `mean_squared_error` is a scorer that needs to be minimized, but `check_scoring` will return a *negated* version if you pass `scoring="mean_squared_error"` directly. To truly test a non-negated metric, you'd need to pass a custom callable scorer that returns a positive value for error).
-    -   [ ] 3.2.3. Alternatively, if we want to test a metric that is *not* negated by `check_scoring` (e.g., a custom loss function), we would need to pass a callable to `scoring` that returns a value to be minimized.
-    -   [ ] 3.2.4. For now, focus on `neg_mean_squared_error` and ensure `best_score_` is negative.
+-   [x] **3.2. Add a new test for "mean_squared_error" (or similar direct error metric)**:
+    -   [x] 3.2.1. Create a regression dataset.
+    -   [x] 3.2.2. Initialize `StepwiseHyperoptOptimizer` with `scoring="neg_mean_squared_error"`. (Note: `sklearn`'s `mean_squared_error` is a scorer that needs to be minimized, but `check_scoring` will return a *negated* version if you pass `scoring="mean_squared_error"` directly. To truly test a non-negated metric, you'd need to pass a custom callable scorer that returns a positive value for error).
+    -   [x] 3.2.3. Alternatively, if we want to test a metric that is *not* negated by `check_scoring` (e.g., a custom loss function), we would need to pass a callable to `scoring` that returns a value to be minimized.
+    -   [x] 3.2.4. For now, focus on `neg_mean_squared_error` and ensure `best_score_` is negative.
 
 ## 4. Code Review and Refinement
 
--   [ ] **4.1. Confirm `check_scoring` behavior**:
-    -   [ ] 4.1.1. Double-check `sklearn.metrics.check_scoring` documentation to ensure it consistently returns a scorer that produces *higher* values for *better* performance, which is then negated by `objective`. This is generally true for `sklearn`'s built-in scorers.
--   [ ] **4.2. Edge Cases**:
-    -   [ ] 4.2.1. What happens if `scoring` is a custom callable that already returns a value to be minimized (e.g., a custom loss function)? The current `objective` would negate it, leading to maximization. If such a use case is desired, the `objective` function might need a flag or more sophisticated logic to determine whether to negate the score.
-        -   [ ] **Decision**: For now, assume `scoring` will always be an `sklearn` string or a callable that returns a value to be maximized (i.e., higher is better). If a custom loss function (lower is better) is needed, the user should pass `lambda estimator, X, y: -my_custom_loss(estimator, X, y)` as the `scoring` callable.
+-   [x] **4.1. Confirm `check_scoring` behavior**:
+    -   [x] 4.1.1. Double-check `sklearn.metrics.check_scoring` documentation to ensure it consistently returns a scorer that produces *higher* values for *better* performance, which is then negated by `objective`. This is generally true for `sklearn`'s built-in scorers.
+-   [x] **4.2. Edge Cases**:
+    -   [x] 4.2.1. What happens if `scoring` is a custom callable that already returns a value to be minimized (e.g., a custom loss function)? The current `objective` would negate it, leading to maximization. If such a use case is desired, the `objective` function might need a flag or more sophisticated logic to determine whether to negate the score.
+        -   [x] **Decision**: For now, assume `scoring` will always be an `sklearn` string or a callable that returns a value to be maximized (i.e., higher is better). If a custom loss function (lower is better) is needed, the user should pass `lambda estimator, X, y: -my_custom_loss(estimator, X, y)` as the `scoring` callable.
