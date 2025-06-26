@@ -21,6 +21,18 @@ This document outlines tasks to verify that the `StepwiseHyperoptOptimizer` corr
     -   [x] 2.1.4. Run `optimizer.fit(X, y)`.
     -   [x] 2.1.5. Assert that `optimizer.best_score_` is positive and represents a reasonable accuracy score (e.g., > 0.5 for a binary classification).
     -   [x] 2.1.6. (Optional) Manually calculate the accuracy for `optimizer.best_params_` to cross-verify.
+-   [ ] **2.2. Add a new test for a classification model with "roc_auc" scoring**:
+    -   [x] 2.2.1. Create a simple classification dataset.
+    -   [x] 2.2.2. Initialize `StepwiseHyperoptOptimizer` with a classification model and `scoring="roc_auc"`.
+    -   [x] 2.2.3. Define a simple `param_space_sequence`.
+    -   [x] 2.2.4. Run `optimizer.fit(X, y)`.
+    -   [x] 2.2.5. Assert that `optimizer.best_score_` is between 0 and 1, and ideally > 0.5.
+-   [ ] **2.3. Add a new test for a regression model with "r2" scoring**:
+    -   [x] 2.3.1. Create a simple regression dataset.
+    -   [x] 2.3.2. Initialize `StepwiseHyperoptOptimizer` with a regression model and `scoring="r2"`.
+    -   [x] 2.3.3. Define a simple `param_space_sequence`.
+    -   [x] 2.3.4. Run `optimizer.fit(X, y)`.
+    -   [x] 2.3.5. Assert that `optimizer.best_score_` is a reasonable R2 score (e.g., positive, ideally close to 1).
 
 ## 3. Test Cases for Minimization Metrics
 
@@ -28,11 +40,11 @@ This document outlines tasks to verify that the `StepwiseHyperoptOptimizer` corr
     -   [x] 3.1.1. Review `test_integer_hyperparameter_cleaning` and `test_fit_args_kwargs_passing` to ensure they implicitly test `neg_mean_squared_error` (the default).
     -   [x] 3.1.2. Confirm that `optimizer.best_score_` is negative, as expected for a negated error metric.
 
--   [x] **3.2. Add a new test for "mean_squared_error" (or similar direct error metric)**:
-    -   [x] 3.2.1. Create a regression dataset.
-    -   [x] 3.2.2. Initialize `StepwiseHyperoptOptimizer` with `scoring="neg_mean_squared_error"`. (Note: `sklearn`'s `mean_squared_error` is a scorer that needs to be minimized, but `check_scoring` will return a *negated* version if you pass `scoring="mean_squared_error"` directly. To truly test a non-negated metric, you'd need to pass a custom callable scorer that returns a positive value for error).
-    -   [x] 3.2.3. Alternatively, if we want to test a metric that is *not* negated by `check_scoring` (e.g., a custom loss function), we would need to pass a callable to `scoring` that returns a value to be minimized.
-    -   [x] 3.2.4. For now, focus on `neg_mean_squared_error` and ensure `best_score_` is negative.
+-   [ ] **3.2. Add a new test for "mean_squared_error" (or similar direct error metric)**:
+    -   [ ] 3.2.1. Create a regression dataset.
+    -   [ ] 3.2.2. Initialize `StepwiseHyperoptOptimizer` with `scoring="neg_mean_squared_error"`. (Note: `sklearn`'s `mean_squared_error` is a scorer that needs to be minimized, but `check_scoring` will return a *negated* version if you pass `scoring="mean_squared_error"` directly. To truly test a non-negated metric, you'd need to pass a custom callable scorer that returns a positive value for error).
+    -   [ ] 3.2.3. Alternatively, if we want to test a metric that is *not* negated by `check_scoring` (e.g., a custom loss function), we would need to pass a callable to `scoring` that returns a value to be minimized.
+    -   [ ] 3.2.4. For now, focus on `neg_mean_squared_error` and ensure `best_score_` is negative.
 
 ## 4. Code Review and Refinement
 
