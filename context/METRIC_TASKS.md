@@ -53,3 +53,9 @@ This document outlines tasks to verify that the `StepwiseHyperoptOptimizer` corr
 -   [x] **4.2. Edge Cases**:
     -   [x] 4.2.1. What happens if `scoring` is a custom callable that already returns a value to be minimized (e.g., a custom loss function)? The current `objective` would negate it, leading to maximization. If such a use case is desired, the `objective` function might need a flag or more sophisticated logic to determine whether to negate the score.
         -   [x] **Decision**: For now, assume `scoring` will always be an `sklearn` string or a callable that returns a value to be maximized (i.e., higher is better). If a custom loss function (lower is better) is needed, the user should pass `lambda estimator, X, y: -my_custom_loss(estimator, X, y)` as the `scoring` callable.
+-   [ ] **4.3. Implement `minimize_metric` flag**:
+    -   [ ] 4.3.1. Add a `minimize_metric: bool = False` parameter to `StepwiseHyperoptOptimizer.__init__`.
+    -   [ ] 4.3.2. Modify the `objective` method to conditionally negate the score: `return np.mean(score) if self.minimize_metric else -np.mean(score)`.
+    -   [ ] 4.3.3. Modify the `fit` method to set `self.best_score_` based on `minimize_metric`: `self.best_score_ = min(trials.losses()) if self.minimize_metric else -min(trials.losses())`.
+    -   [ ] 4.3.4. Update all existing tests in `tests/test_basic.py` to explicitly pass `minimize_metric=True` for "neg_mean_squared_error" and `minimize_metric=False` for "accuracy", "roc_auc", and "r2".
+    -   [ ] 4.3.5. Add a new test case specifically for a metric that should be minimized (e.g., "mean_squared_error") with `minimize_metric=True`, asserting that `best_score_` is positive and represents the error.

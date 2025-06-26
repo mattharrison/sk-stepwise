@@ -104,6 +104,7 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     int_params: list[str] = field(default_factory=list)
     debug: bool = False
     _fit_params: dict = field(default_factory=dict) # To store fit_params passed to .fit()
+    minimize_metric: bool = False # New flag: True if the metric should be minimized (e.g., MSE), False if maximized (e.g., R2, Accuracy)
 
     def _flatten_params(self, params: dict) -> dict:
         """
@@ -177,7 +178,9 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         score = _custom_cross_val_score(
             self.model, self.X, self.y, cv=self.cv, scoring=self.scoring, fit_params=self._fit_params.copy() # Pass a copy to avoid modifying original
         )
-        return -np.mean(score)
+        
+        # Conditionally negate the score based on minimize_metric flag
+        return np.mean(score) if self.minimize_metric else -np.mean(score)
 
     def fit(self, X: pd.DataFrame, y: pd.Series, *args, **kwargs) -> Self:
         self.X = X
@@ -211,7 +214,9 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             cleaned_step_best_params = self.clean_int_params(filtered_step_best_params)
             
             self.best_params_.update(cleaned_step_best_params)
-            self.best_score_ = -min(trials.losses())
+            
+            # Conditionally set best_score_ based on minimize_metric flag
+            self.best_score_ = min(trials.losses()) if self.minimize_metric else -min(trials.losses())
 
             print(f"Best parameters after step {step + 1}: {self.best_params_}")
             print(f"Best score after step {step + 1}: {self.best_score_}")

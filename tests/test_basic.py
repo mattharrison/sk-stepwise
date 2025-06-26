@@ -7,6 +7,7 @@ from sklearn.datasets import make_regression, make_classification
 from hyperopt import hp
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.metrics import mean_squared_error, make_scorer
 
 
 def test_initialization():
@@ -81,6 +82,7 @@ def test_fit_args_kwargs_passing():
         model=mock_model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=1,
+        minimize_metric=False # Default for accuracy/R2-like metrics
     )
 
     sample_weight = np.random.rand(len(y))
@@ -129,6 +131,7 @@ def test_integer_hyperparameter_cleaning():
         max_evals_per_step=5,  # Run a few evaluations to get varied params
         random_state=42,
         int_params=int_params_to_clean,  # Pass the list of integer parameters
+        minimize_metric=True # Default for neg_mean_squared_error
     )
 
     optimizer.fit(X, y)
@@ -192,7 +195,8 @@ def test_svm_conditional_hyperparameters():
         max_evals_per_step=10, # More evals to explore kernel choices
         random_state=42,
         int_params=int_params_to_clean,
-        scoring="accuracy" # Set scoring for classification
+        scoring="accuracy", # Set scoring for classification
+        minimize_metric=False # Accuracy is maximized
     )
 
     optimizer.fit(X, y)
@@ -239,7 +243,8 @@ def test_maximization_metric_accuracy():
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
         random_state=42,
-        scoring="accuracy"
+        scoring="accuracy",
+        minimize_metric=False # Accuracy is maximized
     )
 
     optimizer.fit(X, y)
@@ -266,7 +271,8 @@ def test_maximization_metric_roc_auc():
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
         random_state=42,
-        scoring="roc_auc" # For binary classification, roc_auc is a valid scoring
+        scoring="roc_auc", # For binary classification, roc_auc is a valid scoring
+        minimize_metric=False # ROC AUC is maximized
     )
 
     optimizer.fit(X, y)
@@ -293,7 +299,8 @@ def test_maximization_metric_r2():
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
         random_state=42,
-        scoring="r2"
+        scoring="r2",
+        minimize_metric=False # R2 is maximized
     )
 
     optimizer.fit(X, y)
@@ -324,7 +331,8 @@ def test_minimization_metric_neg_mean_squared_error():
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
         random_state=42,
-        scoring="neg_mean_squared_error" # This is the default, but explicitly set for clarity
+        scoring="neg_mean_squared_error", # This is the default, but explicitly set for clarity
+        minimize_metric=True # Negated MSE is minimized
     )
 
     optimizer.fit(X, y)
@@ -333,3 +341,35 @@ def test_minimization_metric_neg_mean_squared_error():
     assert optimizer.best_score_ is not None
     assert optimizer.best_score_ < 0 # Negated MSE should be negative
     # The closer to 0, the better the score (less negative)
+
+
+def test_minimization_metric_mean_squared_error():
+    # 3.2. Add a new test for "mean_squared_error" (or similar direct error metric)
+    X, y = make_regression(n_samples=100, n_features=5, random_state=42)
+    X = pd.DataFrame(X)
+    y = pd.Series(y)
+
+    model = LinearRegression()
+    param_space_sequence = [
+        {"fit_intercept": hp.choice("fit_intercept", [True, False])}
+    ]
+
+    # Use make_scorer to create a scorer that returns positive MSE, which we want to minimize
+    mse_scorer = make_scorer(mean_squared_error, greater_is_better=False)
+
+    optimizer = sw.StepwiseHyperoptOptimizer(
+        model=model,
+        param_space_sequence=param_space_sequence,
+        max_evals_per_step=5,
+        random_state=42,
+        scoring=mse_scorer, # Pass the custom scorer
+        minimize_metric=True # We want to minimize this metric
+    )
+
+    optimizer.fit(X, y)
+
+    # Assert that optimizer.best_score_ is positive, as expected for a direct error metric
+    assert optimizer.best_score_ is not None
+    assert optimizer.best_score_ >= 0 # MSE should be non-negative
+    # For a well-behaved model, MSE should be relatively small
+    assert optimizer.best_score_ < 1000 # Arbitrary upper bound to catch extremely bad models
