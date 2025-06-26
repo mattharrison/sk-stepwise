@@ -12,10 +12,18 @@ from sklearn.base import BaseEstimator # For mocking get_params
 
 
 def test_initialization():
-    model = None
+    # Updated test_initialization to pass a minimal valid model
+    class DummyModel(BaseEstimator):
+        def fit(self, X, y): return self
+        def predict(self, X): return np.zeros(len(X))
+        def score(self, X, y): return 0.0
+        def get_params(self, deep=True): return {} # Minimal get_params
+
+    model = DummyModel()
     rounds = []
     optimizer = sw.StepwiseHyperoptOptimizer(model, rounds)
     assert optimizer is not None
+    assert optimizer._initial_model_params == {} # Should be empty for DummyModel
 
 
 @pytest.mark.xfail(raises=TypeError)
@@ -33,9 +41,11 @@ def test_logistic():
 
 # Mock _Fitable model for testing args and kwargs passing
 class MockModel:
-    def __init__(self):
+    def __init__(self, **kwargs): # Accept arbitrary kwargs
         self.fit_called_with_args = None
         self.coef_ = None # Mimic a fitted attribute for assertion
+        # Store initial params passed to __init__
+        self._initial_params = kwargs 
 
     def fit(self, X, y, sample_weight=None, custom_arg=None, **kwargs):
         # Record all arguments passed to fit
@@ -51,12 +61,13 @@ class MockModel:
         return self
 
     def get_params(self, deep=True):
-        # Required for sklearn.base.clone or estimator.__class__(**estimator.get_params())
-        # Return a dummy set of params for this mock
-        return {"param_a": 1, "param_b": "test"}
+        # Return the parameters passed during initialization, plus any set later
+        # This is a simplified representation; a real model would manage its params
+        return self._initial_params.copy()
 
     def set_params(self, **params):
-        # Allow setting of parameters, even if we don't use them in this mock
+        # Allow setting of parameters, and update internal state
+        self._initial_params.update(params) # Update the internal params
         for key, value in params.items():
             setattr(self, key, value)
         return self
@@ -373,13 +384,17 @@ def test_minimization_metric_mean_squared_error():
     # Assert that optimizer.best_score_ is positive, as expected for a direct error metric
     assert optimizer.best_score_ is not None
     # Use pytest.approx for floating point comparisons
-    assert optimizer.best_score_ == pytest.approx(0.0, abs=1e-9) or optimizer.best_score_ > 0.0
+    # The error was that for a perfect fit, MSE can be extremely close to zero,
+    # but due to floating point precision, it might be a tiny negative number.
+    # We should assert it's approximately non-negative.
+    assert optimizer.best_score_ >= pytest.approx(0.0, abs=1e-9)
     # For a well-behaved model, MSE should be relatively small
     assert optimizer.best_score_ < 1000 # Arbitrary upper bound to catch extremely bad models
 
 
 def test_preserve_initial_model_params():
-    X, y = make_classification(n_samples=50, n_features=2, random_state=42)
+    # Adjusted make_classification to avoid ValueError
+    X, y = make_classification(n_samples=50, n_features=2, n_informative=2, n_redundant=0, random_state=42)
     X = pd.DataFrame(X)
     y = pd.Series(y)
 

@@ -120,7 +120,11 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
 
     def __post_init__(self):
         # Store the initial parameters of the model
-        self._initial_model_params = self.model.get_params()
+        # Only attempt to get params if model is not None
+        if self.model is not None:
+            self._initial_model_params = self.model.get_params()
+        else:
+            self._initial_model_params = {} # Initialize as empty dict if model is None
 
     def _flatten_params(self, params: dict) -> dict:
         """
