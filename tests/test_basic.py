@@ -8,6 +8,7 @@ from hyperopt import hp
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import mean_squared_error, make_scorer
+from sklearn.base import BaseEstimator # For mocking get_params
 
 
 def test_initialization():
@@ -51,7 +52,8 @@ class MockModel:
 
     def get_params(self, deep=True):
         # Required for sklearn.base.clone or estimator.__class__(**estimator.get_params())
-        return {} # No specific params to return for this simple mock
+        # Return a dummy set of params for this mock
+        return {"param_a": 1, "param_b": "test"}
 
     def set_params(self, **params):
         # Allow setting of parameters, even if we don't use them in this mock
@@ -339,7 +341,7 @@ def test_minimization_metric_neg_mean_squared_error():
 
     # 3.1.2. Confirm that optimizer.best_score_ is negative, as expected for a negated error metric.
     assert optimizer.best_score_ is not None
-    #assert optimizer.best_score_ < 0 # Negated MSE should be negative
+    assert optimizer.best_score_ < 0 # Negated MSE should be negative
     # The closer to 0, the better the score (less negative)
 
 
@@ -370,6 +372,46 @@ def test_minimization_metric_mean_squared_error():
 
     # Assert that optimizer.best_score_ is positive, as expected for a direct error metric
     assert optimizer.best_score_ is not None
-    #assert optimizer.best_score_ >= 0 # MSE should be non-negative
+    # Use pytest.approx for floating point comparisons
+    assert optimizer.best_score_ == pytest.approx(0.0, abs=1e-9) or optimizer.best_score_ > 0.0
     # For a well-behaved model, MSE should be relatively small
-    #assert optimizer.best_score_ < 1000 # Arbitrary upper bound to catch extremely bad models
+    assert optimizer.best_score_ < 1000 # Arbitrary upper bound to catch extremely bad models
+
+
+def test_preserve_initial_model_params():
+    X, y = make_classification(n_samples=50, n_features=2, random_state=42)
+    X = pd.DataFrame(X)
+    y = pd.Series(y)
+
+    # Define a model with specific initial parameters
+    initial_solver = 'liblinear'
+    initial_random_state = 123
+    model = LogisticRegression(solver=initial_solver, random_state=initial_random_state, C=1.0)
+
+    # Define a param space that does NOT include 'solver' or 'random_state'
+    param_space_sequence = [
+        {"C": hp.loguniform("C", np.log(0.01), np.log(10))}
+    ]
+
+    optimizer = sw.StepwiseHyperoptOptimizer(
+        model=model,
+        param_space_sequence=param_space_sequence,
+        max_evals_per_step=5,
+        random_state=42,
+        scoring="accuracy",
+        minimize_metric=False
+    )
+
+    optimizer.fit(X, y)
+
+    # Assert that the final fitted model retains the initial parameters
+    assert optimizer.model.get_params()['solver'] == initial_solver
+    assert optimizer.model.get_params()['random_state'] == initial_random_state
+    # Also check that the C parameter was optimized and is present
+    assert 'C' in optimizer.best_params_
+    assert optimizer.model.get_params()['C'] == optimizer.best_params_['C']
+
+    # Verify that _initial_model_params was correctly stored
+    assert optimizer._initial_model_params['solver'] == initial_solver
+    assert optimizer._initial_model_params['random_state'] == initial_random_state
+    assert optimizer._initial_model_params['C'] == 1.0 # C should be the initial C, not the optimized one here

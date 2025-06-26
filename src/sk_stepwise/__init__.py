@@ -32,10 +32,11 @@ class _Fitable(Protocol):
     def fit(self, X: MatrixLike, y: ArrayLike, *args, **kwargs) -> Self: ...
     def predict(self, X: MatrixLike) -> ArrayLike: ...
     def set_params(self, **params: PARAM) -> Self: ...
+    def get_params(self, deep: bool = True) -> dict[str, PARAM]: ... # Added get_params
     def score(self, X: MatrixLike, y: ArrayLike) -> float: ...
 
 
-def _custom_cross_val_score(estimator, X, y, cv, scoring, fit_params):
+def _custom_cross_val_score(estimator, X, y, cv, scoring, fit_params, initial_model_params):
     """
     An alternative to sklearn.model_selection.cross_val_score that allows
     passing fit_params, including eval_set, where eval_set is dynamically
@@ -77,7 +78,17 @@ def _custom_cross_val_score(estimator, X, y, cv, scoring, fit_params):
 
         # Create a new estimator instance for each fold to avoid data leakage
         # and ensure parameters are reset.
-        fold_estimator = estimator.__class__(**estimator.get_params())
+        # Merge initial_model_params with the current estimator's params
+        # The estimator's params might already contain some of the best_params_ from previous steps
+        # We want to ensure initial_model_params are always present.
+        # The order of merging is important: initial_model_params should be overridden by
+        # parameters explicitly set by the optimizer if there's a conflict.
+        # However, for creating a *new* instance, we start with initial_model_params
+        # and then apply the current trial's parameters.
+        
+        # For cross-validation, we need a fresh model with initial params
+        # and then apply the current trial's params.
+        fold_estimator = estimator.__class__(**initial_model_params)
         
         # Pass sample_weight explicitly if it exists, otherwise pass other fit_params
         if fold_sample_weight is not None:
@@ -105,6 +116,11 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     debug: bool = False
     _fit_params: dict = field(default_factory=dict) # To store fit_params passed to .fit()
     minimize_metric: bool = False # New flag: True if the metric should be minimized (e.g., MSE), False if maximized (e.g., R2, Accuracy)
+    _initial_model_params: dict[str, PARAM] = field(init=False, default_factory=dict) # Store initial model parameters
+
+    def __post_init__(self):
+        # Store the initial parameters of the model
+        self._initial_model_params = self.model.get_params()
 
     def _flatten_params(self, params: dict) -> dict:
         """
@@ -156,9 +172,14 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         # Flatten the parameters first
         flattened_params = self._flatten_params(params)
         
-        # Combine best_params_ with current trial's flattened params
-        # Apply filtering to the combined set of parameters
-        combined_params = {**self.best_params_, **flattened_params}
+        # Combine initial model parameters, best_params_ from previous steps,
+        # and current trial's flattened params.
+        # Order of precedence: current trial > best_params_ > initial_model_params
+        combined_params = {
+            **self._initial_model_params,
+            **self.best_params_,
+            **flattened_params
+        }
         
         # Filter CatBoost-specific conditional parameters
         filtered_params = self._filter_catboost_params(combined_params)
@@ -171,12 +192,16 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
 
         # clear out previous parameters - otherwise models like CatBoost will
         # complain when we set a conflicting parameter
-        self.model = self.model.__class__()
-        self.model.set_params(**cleaned_params)
+        # We create a new instance using initial_model_params, then set the current trial's params
+        # This ensures base parameters are always present.
+        temp_model = self.model.__class__(**self._initial_model_params)
+        temp_model.set_params(**cleaned_params)
         
         # Use the custom cross_val_score that handles fit_params
         score = _custom_cross_val_score(
-            self.model, self.X, self.y, cv=self.cv, scoring=self.scoring, fit_params=self._fit_params.copy() # Pass a copy to avoid modifying original
+            temp_model, self.X, self.y, cv=self.cv, scoring=self.scoring, 
+            fit_params=self._fit_params.copy(), # Pass a copy to avoid modifying original
+            initial_model_params=self._initial_model_params # Pass initial params for fold_estimator creation
         )
         
         # Conditionally negate the score based on minimize_metric flag
@@ -216,6 +241,11 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             self.best_params_.update(cleaned_step_best_params)
             
             # Conditionally set best_score_ based on minimize_metric flag
+            # The loss from hyperopt is always minimized.
+            # If minimize_metric is True, the objective returned the actual metric value (positive for MSE).
+            # If minimize_metric is False, the objective returned -metric_value (negative for R2/Accuracy).
+            # So, min(trials.losses()) will be the best value for the objective function.
+            # We need to convert it back to the original metric scale.
             self.best_score_ = min(trials.losses()) if self.minimize_metric else -min(trials.losses())
 
             print(f"Best parameters after step {step + 1}: {self.best_params_}")
@@ -225,7 +255,11 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             print(f'{kwargs=}')
         # Fit the model with the best parameters on the full dataset
         # Ensure final best_params_ are also filtered before setting them on the model
-        final_params_for_model = self._filter_catboost_params(self.best_params_)
+        # Combine initial params with the optimized params for the final model
+        final_params_for_model = {
+            **self._initial_model_params,
+            **self._filter_catboost_params(self.best_params_)
+        }
         self.model.set_params(**final_params_for_model)
         self.model.fit(X, y, *args, **kwargs) # Pass original args/kwargs for final fit
 
