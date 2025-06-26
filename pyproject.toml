@@ -1,7 +1,7 @@
 [project]
 name = "sk-stepwise"
-version = "0.1.1"
-description = "Add your description here"
+version = "0.1.5"
+description = "Tune models bit by bit"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -9,6 +9,7 @@ dependencies = [
     "hyperopt>=0.2.7",
     "numpy>=2.1.1",
     "pandas>=2.2.2",
+    "pkginfo>=1.10.0",
     "scikit-learn>=1.5.2",
     "setuptools>=75.1.0",
     "xgboost>=2.1.1",
@@ -27,7 +28,7 @@ dev-dependencies = [
     #"pyre-check>=0.9.22",
     "pytest>=8.3.3",
     "ruff>=0.6.9",
-    "twine>=5.1.1",
+    "twine>=6.1.0",
     "wheel>=0.44.0",
 ]
 
