@@ -223,3 +223,37 @@ class StepwiseOptimizer(BaseEstimator, MetaEstimatorMixin):
             print(f"Best score after step {step + 1}: {self.best_score_}")
 
         return self
+
+
+
+@dataclass
+class CatBoostStepwiseOptimizer(StepwiseOptimizer):
+    """
+    A subclass of StepwiseOptimizer specifically for CatBoost models,
+    handling CatBoost's conditional parameters.
+    """
+    def _clean_params(self, params: dict) -> dict:
+        """
+        Filters CatBoost-specific parameters based on conditional logic
+        and then applies general integer parameter cleaning.
+        """
+        cleaned_params = super()._clean_params(params.copy()) # Start with general cleaning
+
+        conflicting_keys = [
+            # (key,value): remove_key
+            ('grow_policy', 'Lossguide', 'max_leaves'),  # max_leaves is only valid for Lossguide
+            ('od_type', 'IncToDec', 'od_pval'),  # od_pval is only valid for IncToDec
+            ('bootstrap_type', 'Bayesian', 'bagging_temperature'),  # bagging_temperature is only valid for Bayesian bootstrap
+            ('bootstrap_type', 'Subsample', 'subsample'),  # subsample is not valid for Bayesian bootstrap
+            ('bootstrap_type', 'Bayesian', 'subsample'),  # subsample is not valid for Bayesian bootstrap
+            ('bootstrap_type', 'Bayesian', 'bagging_temperature')  # bagging_temperature is only valid for Bayesian bootstrap
+        ]
+
+        for k, v, remove in conflicting_keys:
+            if cleaned_params.get(k) == v and remove in cleaned_params:
+                if self.debug:
+                    print(f'debug: Removing {remove} because {k} is {v}')
+                del cleaned_params[remove]
+        if self.debug:
+            print(f'debug cb: {cleaned_params=}')
+        return cleaned_params

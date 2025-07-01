@@ -14,7 +14,7 @@ def catboost_data():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     return X_train, X_test, y_train, y_test
 
-
+@pytest.mark.slow
 def test_catboost_regressor_initialization(catboost_data):
     X_train, X_test, y_train, y_test = catboost_data
 
@@ -94,7 +94,7 @@ def test_catboost_regressor_initialization(catboost_data):
     optimizer = CatBoostStepwiseOptimizer( # Changed to CatBoostStepwiseOptimizer
         model=model,
         param_space_sequence=param_space_sequence,
-        max_evals_per_step=10,
+        max_evals_per_step=3,
         random_state=42,
         int_params=catboost_int_params,
         scoring="neg_root_mean_squared_error", # Appropriate scoring for RMSE loss

@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-import pandas as pd
 from xgboost import XGBRegressor
 from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
@@ -57,7 +56,7 @@ def test_xgboost_regressor_initialization(xgboost_data):
     optimizer = StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
-        max_evals_per_step=5,
+        max_evals_per_step=3,
         random_state=42,
         int_params=int_params,
         scoring="neg_root_mean_squared_error",

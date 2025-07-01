@@ -10,6 +10,7 @@ venv/
 
 # Environment variables
 .env
+uv.lock
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
@@ -17,4 +18,7 @@ venv/
 .pyre/
 .aider*
 
+catboost_info/
+
 context/
+

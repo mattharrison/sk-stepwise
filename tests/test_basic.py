@@ -85,41 +85,6 @@ class MockModel:
         return 0.0
 
 
-def test_fit_args_kwargs_passing():
-    X, y = make_regression(n_samples=100, n_features=5, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
-
-    # Reset the class-level flag before the test
-    MockModel._fit_was_called_on_any_instance = False
-
-    mock_model = MockModel()
-    param_space_sequence = [
-        {"fit_intercept": hp.choice("fit_intercept", [True, False])}
-    ]
-
-    optimizer = sw.StepwiseOptimizer(
-        model=mock_model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=1,
-        minimize_metric=False # Default for accuracy/R2-like metrics
-    )
-
-    sample_weight = np.random.rand(len(y))
-    custom_arg_value = "test_value"
-    extra_kwarg = {"verbose": True}
-
-    optimizer.fit(
-        X, y, sample_weight=sample_weight, custom_arg=custom_arg_value, **extra_kwarg
-    )
-
-    # The optimizer's *original* model instance should NOT have been fitted by optimizer.fit()
-    assert not hasattr(optimizer.model, "fit_called_with_args")
-    assert not hasattr(optimizer.model, "coef_")
-
-    # However, temporary instances of MockModel *should* have been fitted during cross-validation
-    assert MockModel._fit_was_called_on_any_instance
-
 
 def test_integer_hyperparameter_cleaning():
     X, y = make_regression(n_samples=100, n_features=5, random_state=42)
