@@ -141,36 +141,14 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
                 flattened[key] = value
         return flattened
 
-    def _filter_catboost_params(self, params: dict) -> dict:
+    def _clean_params(self, params: dict) -> dict:
         """
-        Filters CatBoost-specific parameters based on conditional logic.
-        This function assumes params is already flattened.
+        Applies general parameter cleaning, e.g., coercing to int.
+        Subclasses can override this for model-specific cleaning.
         """
-        #filtered_params = params.copy()
-
-        conflicting_keys = [
-            # (key,value): remove_key
-            ('grow_policy', 'Lossguide', 'max_leaves'),  # max_leaves is only valid for Lossguide
-            ('od_type', 'IncToDec', 'od_pval'),  # od_pval is only valid for IncToDec
-            ('bootstrap_type', 'Bayesian', 'bagging_temperature'),  # bagging_temperature is only valid for Bayesian bootstrap
-            ('bootstrap_type', 'Subsample', 'subsample'),  # subsample is not valid for Bayesian bootstrap
-            ('bootstrap_type', 'Bayesian', 'subsample'),  # subsample is not valid for Bayesian bootstrap
-            ('bootstrap_type', 'Bayesian', 'bagging_temperature')  # bagging_temperature is only valid for Bayesian bootstrap
-        ]
-
-        for k, v, remove in conflicting_keys:
-            if params.get(k) == v and remove in params:
-                if self.debug:
-                    print(f'debug: Removing {remove} because {k} is {v}')
-                # If the key is in conflicting_params and exists in params, remove it
-                del params[remove]
-        if self.debug:
-            print(f'debug cb: {params=}')
-        return params
-
-    def clean_int_params(self, params: dict[str, PARAM]) -> dict[str, PARAM]:
-        # Use the instance's int_params list
-        return {k: int(v) if k in self.int_params else v for k, v in params.items()}
+        # Coerce specified parameters to int
+        cleaned = {k: int(v) if k in self.int_params else v for k, v in params.items()}
+        return cleaned
 
     def objective(self, params: dict[str, PARAM]) -> float:
         # Flatten the parameters first
@@ -185,11 +163,8 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             **flattened_params
         }
         
-        # Filter CatBoost-specific conditional parameters
-        filtered_params = self._filter_catboost_params(combined_params)
-
-        # Clean integer parameters
-        cleaned_params = self.clean_int_params(filtered_params)
+        # Apply cleaning (e.g., int coercion, model-specific filtering)
+        cleaned_params = self._clean_params(combined_params)
         
         if self.debug:
             print(f'debug: {cleaned_params=}')
@@ -235,12 +210,8 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
             # Flatten the step_best_params
             flattened_step_best_params = self._flatten_params(step_best_params)
             
-            # Filter CatBoost-specific conditional parameters for the best_params_
-            # This filtering is crucial before updating self.best_params_
-            filtered_step_best_params = self._filter_catboost_params(flattened_step_best_params)
-
-            # Clean integer parameters
-            cleaned_step_best_params = self.clean_int_params(filtered_step_best_params)
+            # Apply cleaning (e.g., int coercion, model-specific filtering)
+            cleaned_step_best_params = self._clean_params(flattened_step_best_params)
             
             self.best_params_.update(cleaned_step_best_params)
             
@@ -258,11 +229,10 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
         if self.debug:
             print(f'{kwargs=}')
         # Fit the model with the best parameters on the full dataset
-        # Ensure final best_params_ are also filtered before setting them on the model
         # Combine initial params with the optimized params for the final model
         final_params_for_model = {
             **self._initial_model_params,
-            **self._filter_catboost_params(self.best_params_)
+            **self._clean_params(self.best_params_) # Apply cleaning one last time for the final model
         }
         self.model.set_params(**final_params_for_model)
         self.model.fit(X, y, *args, **kwargs) # Pass original args/kwargs for final fit
@@ -275,3 +245,35 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
     def score(self, X: pd.DataFrame, y: pd.Series) -> float:
         return self.model.score(X, y)
 
+
+@dataclass
+class CatBoostStepwiseHO(StepwiseHyperoptOptimizer):
+    """
+    A subclass of StepwiseHyperoptOptimizer specifically for CatBoost models,
+    handling CatBoost's conditional parameters.
+    """
+    def _clean_params(self, params: dict) -> dict:
+        """
+        Filters CatBoost-specific parameters based on conditional logic
+        and then applies general integer parameter cleaning.
+        """
+        cleaned_params = super()._clean_params(params.copy()) # Start with general cleaning
+
+        conflicting_keys = [
+            # (key,value): remove_key
+            ('grow_policy', 'Lossguide', 'max_leaves'),  # max_leaves is only valid for Lossguide
+            ('od_type', 'IncToDec', 'od_pval'),  # od_pval is only valid for IncToDec
+            ('bootstrap_type', 'Bayesian', 'bagging_temperature'),  # bagging_temperature is only valid for Bayesian bootstrap
+            ('bootstrap_type', 'Subsample', 'subsample'),  # subsample is not valid for Bayesian bootstrap
+            ('bootstrap_type', 'Bayesian', 'subsample'),  # subsample is not valid for Bayesian bootstrap
+            ('bootstrap_type', 'Bayesian', 'bagging_temperature')  # bagging_temperature is only valid for Bayesian bootstrap
+        ]
+
+        for k, v, remove in conflicting_keys:
+            if cleaned_params.get(k) == v and remove in cleaned_params:
+                if self.debug:
+                    print(f'debug: Removing {remove} because {k} is {v}')
+                del cleaned_params[remove]
+        if self.debug:
+            print(f'debug cb: {cleaned_params=}')
+        return cleaned_params
