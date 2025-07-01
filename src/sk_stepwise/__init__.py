@@ -227,24 +227,6 @@ class StepwiseOptimizer(BaseEstimator, MetaEstimatorMixin):
             print(f"Best score after step {step + 1}: {self.best_score_}")
 
         return self
-        if self.debug:
-            print(f'{kwargs=}')
-        # Fit the model with the best parameters on the full dataset
-        # Combine initial params with the optimized params for the final model
-        final_params_for_model = {
-            **self._initial_model_params,
-            **self._clean_params(self.best_params_) # Apply cleaning one last time for the final model
-        }
-        self.model.set_params(**final_params_for_model)
-        self.model.fit(X, y, *args, **kwargs) # Pass original args/kwargs for final fit
-
-        return self
-
-    def predict(self, X: pd.DataFrame) -> ArrayLike:
-        return self.model.predict(X)
-
-    def score(self, X: pd.DataFrame, y: pd.Series) -> float:
-        return self.model.score(X, y)
 
 
 @dataclass

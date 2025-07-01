@@ -41,6 +41,9 @@ def test_logistic():
 
 # Mock _Fitable model for testing args and kwargs passing
 class MockModel:
+    # Class-level flag to track if any instance of MockModel had its fit method called
+    _fit_was_called_on_any_instance = False
+
     def __init__(self, **kwargs): # Accept arbitrary kwargs
         self.fit_called_with_args = None
         self.coef_ = None # Mimic a fitted attribute for assertion
@@ -58,6 +61,7 @@ class MockModel:
         }
         # Simulate fitting by setting a dummy attribute
         self.coef_ = np.array([1.0, 2.0, 3.0, 4.0, 5.0]) # Dummy value
+        MockModel._fit_was_called_on_any_instance = True # Set class-level flag
         return self
 
     def get_params(self, deep=True):
@@ -86,6 +90,9 @@ def test_fit_args_kwargs_passing():
     X = pd.DataFrame(X)
     y = pd.Series(y)
 
+    # Reset the class-level flag before the test
+    MockModel._fit_was_called_on_any_instance = False
+
     mock_model = MockModel()
     param_space_sequence = [
         {"fit_intercept": hp.choice("fit_intercept", [True, False])}
@@ -106,11 +113,12 @@ def test_fit_args_kwargs_passing():
         X, y, sample_weight=sample_weight, custom_arg=custom_arg_value, **extra_kwarg
     )
 
-    # The optimizer's internal model (mock_model) should NOT have its fit method called
-    # with the original fit_params during the final fit on the full dataset.
-    # The optimizer only finds the best parameters, it does not fit the final model.
+    # The optimizer's *original* model instance should NOT have been fitted by optimizer.fit()
     assert not hasattr(optimizer.model, "fit_called_with_args")
     assert not hasattr(optimizer.model, "coef_")
+
+    # However, temporary instances of MockModel *should* have been fitted during cross-validation
+    assert MockModel._fit_was_called_on_any_instance
 
 
 def test_integer_hyperparameter_cleaning():
