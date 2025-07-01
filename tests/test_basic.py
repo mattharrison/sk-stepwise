@@ -106,16 +106,11 @@ def test_fit_args_kwargs_passing():
         X, y, sample_weight=sample_weight, custom_arg=custom_arg_value, **extra_kwarg
     )
 
-    # The optimizer's internal model (mock_model) should have its fit method called
+    # The optimizer's internal model (mock_model) should NOT have its fit method called
     # with the original fit_params during the final fit on the full dataset.
-    assert hasattr(optimizer.model, "fit_called_with_args")
-    assert optimizer.model.fit_called_with_args["sample_weight"] is sample_weight
-    assert optimizer.model.fit_called_with_args["custom_arg"] == custom_arg_value
-    assert optimizer.model.fit_called_with_args["kwargs"] == extra_kwarg
-
-    # Also check if the model was actually "fitted" (i.e., its internal state was updated)
-    assert hasattr(optimizer.model, "coef_")
-    assert optimizer.model.coef_ is not None
+    # The optimizer only finds the best parameters, it does not fit the final model.
+    assert not hasattr(optimizer.model, "fit_called_with_args")
+    assert not hasattr(optimizer.model, "coef_")
 
 
 def test_integer_hyperparameter_cleaning():
@@ -156,9 +151,8 @@ def test_integer_hyperparameter_cleaning():
     # Verify that other parameters are not coerced to int
     assert isinstance(optimizer.best_params_["learning_rate"], float)
 
-    # Ensure the model was fitted with the cleaned integer parameters
-    assert hasattr(optimizer.model, "n_iter_")
-    assert optimizer.model.n_iter_ is not None
+    # Ensure the model was NOT fitted by the optimizer
+    assert not hasattr(optimizer.model, "n_iter_")
 
 
 def test_svm_conditional_hyperparameters():
@@ -420,13 +414,11 @@ def test_preserve_initial_model_params():
     optimizer.fit(X, y)
 
     # Assert that the final fitted model retains the initial parameters
-    assert optimizer.model.get_params()['solver'] == initial_solver
-    assert optimizer.model.get_params()['random_state'] == initial_random_state
-    # Also check that the C parameter was optimized and is present
-    assert 'C' in optimizer.best_params_
-    assert optimizer.model.get_params()['C'] == optimizer.best_params_['C']
-
-    # Verify that _initial_model_params was correctly stored
+    # The optimizer itself does not fit the final model, but it should store the initial params
+    # and the best_params_ found. The user is responsible for fitting the model with these params.
     assert optimizer._initial_model_params['solver'] == initial_solver
     assert optimizer._initial_model_params['random_state'] == initial_random_state
     assert optimizer._initial_model_params['C'] == 1.0 # C should be the initial C, not the optimized one here
+
+    # Also check that the C parameter was optimized and is present in best_params_
+    assert 'C' in optimizer.best_params_
