@@ -215,48 +215,11 @@ class StepwiseOptimizer(BaseEstimator, MetaEstimatorMixin):
             
             self.best_params_.update(cleaned_step_best_params)
             
-            # Conditionally set best_score_ based on minimize_metric flag
-            # The loss from hyperopt is always minimized.
-            # If minimize_metric is True, the objective returned the actual metric value (positive for MSE).
-            # If minimize_metric is False, the objective returned -metric_value (negative for R2/Accuracy).
-            # So, min(trials.losses()) will be the best value for the objective function.
-            # We need to convert it back to the original metric scale.
-            self.best_score_ = min(trials.losses()) if self.minimize_metric else -min(trials.losses())
+            # Calculate the mean of all losses from the trials in the current step
+            # Conditionally negate the score based on minimize_metric flag
+            self.best_score_ = np.mean(trials.losses()) if self.minimize_metric else -np.mean(trials.losses())
 
             print(f"Best parameters after step {step + 1}: {self.best_params_}")
             print(f"Best score after step {step + 1}: {self.best_score_}")
 
         return self
-
-
-@dataclass
-class CatBoostStepwiseOptimizer(StepwiseOptimizer):
-    """
-    A subclass of StepwiseOptimizer specifically for CatBoost models,
-    handling CatBoost's conditional parameters.
-    """
-    def _clean_params(self, params: dict) -> dict:
-        """
-        Filters CatBoost-specific parameters based on conditional logic
-        and then applies general integer parameter cleaning.
-        """
-        cleaned_params = super()._clean_params(params.copy()) # Start with general cleaning
-
-        conflicting_keys = [
-            # (key,value): remove_key
-            ('grow_policy', 'Lossguide', 'max_leaves'),  # max_leaves is only valid for Lossguide
-            ('od_type', 'IncToDec', 'od_pval'),  # od_pval is only valid for IncToDec
-            ('bootstrap_type', 'Bayesian', 'bagging_temperature'),  # bagging_temperature is only valid for Bayesian bootstrap
-            ('bootstrap_type', 'Subsample', 'subsample'),  # subsample is not valid for Bayesian bootstrap
-            ('bootstrap_type', 'Bayesian', 'subsample'),  # subsample is not valid for Bayesian bootstrap
-            ('bootstrap_type', 'Bayesian', 'bagging_temperature')  # bagging_temperature is only valid for Bayesian bootstrap
-        ]
-
-        for k, v, remove in conflicting_keys:
-            if cleaned_params.get(k) == v and remove in cleaned_params:
-                if self.debug:
-                    print(f'debug: Removing {remove} because {k} is {v}')
-                del cleaned_params[remove]
-        if self.debug:
-            print(f'debug cb: {cleaned_params=}')
-        return cleaned_params
