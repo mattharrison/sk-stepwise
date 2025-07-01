@@ -102,7 +102,7 @@ def _custom_cross_val_score(estimator, X, y, cv, scoring, fit_params, initial_mo
 
 
 @dataclass
-class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
+class StepwiseOptimizer(BaseEstimator, MetaEstimatorMixin):
     model: _Fitable
     param_space_sequence: list[dict[str, PARAM | SymbolTable]]
     max_evals_per_step: int = 100
@@ -247,9 +247,9 @@ class StepwiseHyperoptOptimizer(BaseEstimator, MetaEstimatorMixin):
 
 
 @dataclass
-class CatBoostStepwiseHO(StepwiseHyperoptOptimizer):
+class CatBoostStepwiseOptimizer(StepwiseOptimizer):
     """
-    A subclass of StepwiseHyperoptOptimizer specifically for CatBoost models,
+    A subclass of StepwiseOptimizer specifically for CatBoost models,
     handling CatBoost's conditional parameters.
     """
     def _clean_params(self, params: dict) -> dict:

@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from hyperopt import hp
 import numpy as np
 
-from src.sk_stepwise import CatBoostStepwiseHO
+from src.sk_stepwise import CatBoostStepwiseOptimizer
 
 
 @pytest.fixture
@@ -91,7 +91,7 @@ def test_catboost_regressor_initialization(catboost_data):
         "one_hot_max_size", "border_count", "max_ctr_complexity", "min_data_in_leaf"
     ]
 
-    optimizer = CatBoostStepwiseHO( # Changed to CatBoostStepwiseHO
+    optimizer = CatBoostStepwiseOptimizer( # Changed to CatBoostStepwiseOptimizer
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=10,

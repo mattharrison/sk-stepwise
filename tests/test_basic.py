@@ -21,7 +21,7 @@ def test_initialization():
 
     model = DummyModel()
     rounds = []
-    optimizer = sw.StepwiseHyperoptOptimizer(model, rounds)
+    optimizer = sw.StepwiseOptimizer(model, rounds)
     assert optimizer is not None
     assert optimizer._initial_model_params == {} # Should be empty for DummyModel
 
@@ -32,7 +32,7 @@ def test_logistic():
 
     model = linear_model.LinearRegression()
     rounds = []
-    opt = sw.StepwiseHyperoptOptimizer(model, rounds)
+    opt = sw.StepwiseOptimizer(model, rounds)
     X = [[0, 1], [0, 2]]
     y = [1, 0]
     opt.fit(X, y)
@@ -91,7 +91,7 @@ def test_fit_args_kwargs_passing():
         {"fit_intercept": hp.choice("fit_intercept", [True, False])}
     ]
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=mock_model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=1,
@@ -138,7 +138,7 @@ def test_integer_hyperparameter_cleaning():
     # Specify which parameters should be treated as integers
     int_params_to_clean = ["max_iter", "max_depth"]
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,  # Run a few evaluations to get varied params
@@ -202,7 +202,7 @@ def test_svm_conditional_hyperparameters():
     # This is because hyperopt flattens the dictionary.
     int_params_to_clean = ["degree"]
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=10, # More evals to explore kernel choices
@@ -251,7 +251,7 @@ def test_maximization_metric_accuracy():
         {"C": hp.loguniform("C", np.log(0.01), np.log(100))}
     ]
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
@@ -279,7 +279,7 @@ def test_maximization_metric_roc_auc():
         {"C": hp.loguniform("C", np.log(0.01), np.log(100))}
     ]
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
@@ -307,7 +307,7 @@ def test_maximization_metric_r2():
         {"fit_intercept": hp.choice("fit_intercept", [True, False])}
     ]
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
@@ -339,7 +339,7 @@ def test_minimization_metric_neg_mean_squared_error():
         {"fit_intercept": hp.choice("fit_intercept", [True, False])}
     ]
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
@@ -370,7 +370,7 @@ def test_minimization_metric_mean_squared_error():
     # Use make_scorer to create a scorer that returns positive MSE, which we want to minimize
     mse_scorer = make_scorer(mean_squared_error, greater_is_better=False)
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
@@ -408,7 +408,7 @@ def test_preserve_initial_model_params():
         {"C": hp.loguniform("C", np.log(0.01), np.log(10))}
     ]
 
-    optimizer = sw.StepwiseHyperoptOptimizer(
+    optimizer = sw.StepwiseOptimizer(
         model=model,
         param_space_sequence=param_space_sequence,
         max_evals_per_step=5,
