@@ -146,8 +146,8 @@ class StepwiseOptimizer(BaseEstimator, MetaEstimatorMixin):
         Applies general parameter cleaning, e.g., coercing to int.
         Subclasses can override this for model-specific cleaning.
         """
-        # Coerce specified parameters to int
-        cleaned = {k: int(v) if k in self.int_params else v for k, v in params.items()}
+        # Coerce specified parameters to int, but only if the value is not None
+        cleaned = {k: int(v) if k in self.int_params and v is not None else v for k, v in params.items()}
         return cleaned
 
     def objective(self, params: dict[str, PARAM]) -> float:
