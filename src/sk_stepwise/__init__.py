@@ -226,6 +226,7 @@ class StepwiseOptimizer(BaseEstimator, MetaEstimatorMixin):
             print(f"Best parameters after step {step + 1}: {self.best_params_}")
             print(f"Best score after step {step + 1}: {self.best_score_}")
 
+        return self
         if self.debug:
             print(f'{kwargs=}')
         # Fit the model with the best parameters on the full dataset
