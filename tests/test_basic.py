@@ -1,397 +1,576 @@
-import sk_stepwise as sw
-import pytest
-import pandas as pd
 import numpy as np
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.datasets import make_regression, make_classification
-from hyperopt import hp
-from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.metrics import mean_squared_error, make_scorer
-from sklearn.base import BaseEstimator # For mocking get_params
+import pytest
+import sk_stepwise as sw
+import sk_stepwise.search as sw_search
+import warnings
+from catboost import CatBoostRegressor
+from sklearn.datasets import make_regression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.exceptions import NotFittedError
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import make_scorer, mean_absolute_error
+from sklearn.model_selection import KFold
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from xgboost import XGBRegressor
 
 
-def test_initialization():
-    # Updated test_initialization to pass a minimal valid model
-    class DummyModel(BaseEstimator):
-        def fit(self, X, y): return self
-        def predict(self, X): return np.zeros(len(X))
-        def score(self, X, y): return 0.0
-        def get_params(self, deep=True): return {} # Minimal get_params
+def test_stepwise_optuna_search_cv_supports_readme_style_flow(
+    readme_regression_frame, random_forest_estimator, readme_random_forest_space
+):
+    X, y = readme_regression_frame
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=random_forest_estimator,
+        param_distributions=readme_random_forest_space,
+        n_trials_per_step=2,
+        random_state=0,
+    )
 
-    model = DummyModel()
-    rounds = []
-    optimizer = sw.StepwiseOptimizer(model, rounds)
-    assert optimizer is not None
-    assert optimizer._initial_model_params == {} # Should be empty for DummyModel
+    optimizer.fit(X, y)
+    predictions = optimizer.predict(X)
 
-
-@pytest.mark.xfail(raises=TypeError)
-def test_logistic():
-    from sklearn import linear_model
-
-    model = linear_model.LinearRegression()
-    rounds = []
-    opt = sw.StepwiseOptimizer(model, rounds)
-    X = [[0, 1], [0, 2]]
-    y = [1, 0]
-    opt.fit(X, y)
+    assert predictions.shape == (100,)
+    assert set(optimizer.best_params_) == {
+        "n_estimators",
+        "max_depth",
+        "min_samples_split",
+    }
+    assert optimizer.best_estimator_ is not random_forest_estimator
 
 
+def test_predict_before_fit_raises_not_fitted_error():
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LinearRegression(),
+        param_distributions=[],
+        n_trials_per_step=1,
+    )
 
-# Mock _Fitable model for testing args and kwargs passing
-class MockModel:
-    # Class-level flag to track if any instance of MockModel had its fit method called
-    _fit_was_called_on_any_instance = False
+    X, _ = make_regression(n_samples=20, n_features=3, random_state=0)
 
-    def __init__(self, **kwargs): # Accept arbitrary kwargs
-        self.fit_called_with_args = None
-        self.coef_ = None # Mimic a fitted attribute for assertion
-        # Store initial params passed to __init__
-        self._initial_params = kwargs 
-
-    def fit(self, X, y, sample_weight=None, custom_arg=None, **kwargs):
-        # Record all arguments passed to fit
-        self.fit_called_with_args = {
-            "X": X,
-            "y": y,
-            "sample_weight": sample_weight,
-            "custom_arg": custom_arg,
-            "kwargs": kwargs
-        }
-        # Simulate fitting by setting a dummy attribute
-        self.coef_ = np.array([1.0, 2.0, 3.0, 4.0, 5.0]) # Dummy value
-        MockModel._fit_was_called_on_any_instance = True # Set class-level flag
-        return self
-
-    def get_params(self, deep=True):
-        # Return the parameters passed during initialization, plus any set later
-        # This is a simplified representation; a real model would manage its params
-        return self._initial_params.copy()
-
-    def set_params(self, **params):
-        # Allow setting of parameters, and update internal state
-        self._initial_params.update(params) # Update the internal params
-        for key, value in params.items():
-            setattr(self, key, value)
-        return self
-
-    def predict(self, X):
-        # Dummy predict method
-        return np.zeros(len(X))
-
-    def score(self, X, y):
-        # Dummy score method
-        return 0.0
+    with pytest.raises(NotFittedError):
+        optimizer.predict(X)
 
 
+def test_stepwise_search_carries_forward_best_params_across_steps(
+    param_score_regressor,
+):
+    X = np.arange(40, dtype=float).reshape(20, 2)
+    y = np.arange(20, dtype=float)
 
-def test_integer_hyperparameter_cleaning():
-    X, y = make_regression(n_samples=100, n_features=5, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
-
-    model = HistGradientBoostingRegressor(random_state=42)
-
-    # Define a parameter space where 'max_iter' and 'max_depth' might be sampled as floats
-    # hp.quniform samples floats, so we need to ensure they are converted to int
-    param_space_sequence = [
-        {
-            "max_iter": hp.quniform("max_iter", 10, 100, 1),
-            "max_depth": hp.quniform("max_depth", 3, 10, 1),
-            "learning_rate": hp.uniform("learning_rate", 0.01, 0.1),
-        }
-    ]
-
-    # Specify which parameters should be treated as integers
-    int_params_to_clean = ["max_iter", "max_depth"]
-
-    optimizer = sw.StepwiseOptimizer(
-        model=model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=5,  # Run a few evaluations to get varied params
-        random_state=42,
-        int_params=int_params_to_clean,  # Pass the list of integer parameters
-        minimize_metric=True # Default for neg_mean_squared_error
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=param_score_regressor,
+        param_distributions=[
+            {"alpha": sw.Int(1, 2)},
+            {"beta": sw.Int(4, 5)},
+        ],
+        n_trials_per_step=2,
+        cv=2,
+        random_state=0,
     )
 
     optimizer.fit(X, y)
 
-    # After fitting, check that the best_params_ for 'max_iter' and 'max_depth' are integers
-    assert isinstance(optimizer.best_params_["max_iter"], int)
-    assert isinstance(optimizer.best_params_["max_depth"], int)
-
-    # Verify that other parameters are not coerced to int
-    assert isinstance(optimizer.best_params_["learning_rate"], float)
-
-    # Ensure the model was NOT fitted by the optimizer
-    assert not hasattr(optimizer.model, "n_iter_")
+    assert optimizer.best_params_ == {"alpha": 2, "beta": 5}
+    assert optimizer.step_results_[0]["best_params"] == {"alpha": 2}
+    assert optimizer.step_results_[1]["best_params"] == {"alpha": 2, "beta": 5}
+    assert [result["n_trials"] for result in optimizer.step_results_] == [2, 2]
 
 
-def test_svm_conditional_hyperparameters():
-    # Generate a classification dataset
-    X, y = make_regression(n_samples=100, n_features=5, n_informative=3, random_state=42)
-    # Convert regression target to binary classification for SVC
+def test_learned_attributes_are_created_during_fit_only():
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LinearRegression(),
+        param_distributions=[{"fit_intercept": sw.Categorical([True, False])}],
+        n_trials_per_step=2,
+        random_state=0,
+    )
+    X, y = make_regression(n_samples=40, n_features=4, random_state=0)
+
+    assert not hasattr(optimizer, "best_params_")
+    assert not hasattr(optimizer, "best_score_")
+    assert not hasattr(optimizer, "best_estimator_")
+    assert not hasattr(optimizer, "step_results_")
+    assert not hasattr(optimizer, "study_")
+    assert not hasattr(optimizer, "studies_")
+
+    optimizer.fit(X, y)
+
+    assert isinstance(optimizer.best_params_, dict)
+    assert isinstance(optimizer.best_score_, float)
+    assert isinstance(optimizer.step_results_, list)
+    assert isinstance(optimizer.studies_, list)
+    assert optimizer.study_ is optimizer.studies_[-1]
+    assert optimizer.best_estimator_ is not optimizer.estimator
+
+
+def test_random_forest_integration_fit_and_predict(
+    readme_regression_frame, random_forest_estimator, random_forest_small_space
+):
+    X, y = readme_regression_frame
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=random_forest_estimator,
+        param_distributions=random_forest_small_space,
+        n_trials_per_step=2,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+    predictions = optimizer.predict(X.iloc[:5])
+
+    assert predictions.shape == (5,)
+    assert isinstance(optimizer.best_estimator_, RandomForestRegressor)
+
+
+def test_random_state_makes_results_reproducible(
+    readme_regression_frame, random_forest_small_space
+):
+    X, y = readme_regression_frame
+
+    first = sw.StepwiseOptunaSearchCV(
+        estimator=RandomForestRegressor(random_state=0),
+        param_distributions=random_forest_small_space,
+        n_trials_per_step=2,
+        random_state=7,
+    )
+    second = sw.StepwiseOptunaSearchCV(
+        estimator=RandomForestRegressor(random_state=0),
+        param_distributions=random_forest_small_space,
+        n_trials_per_step=2,
+        random_state=7,
+    )
+
+    first.fit(X, y)
+    second.fit(X, y)
+
+    assert first.best_params_ == second.best_params_
+    assert first.best_score_ == second.best_score_
+
+
+def test_pipeline_estimator_with_namespaced_params(readme_regression_frame):
+    X, y = readme_regression_frame
+    pipeline = Pipeline(
+        [
+            ("scale", StandardScaler()),
+            ("regressor", RandomForestRegressor(random_state=0)),
+        ]
+    )
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=pipeline,
+        param_distributions=[
+            {"regressor__n_estimators": sw.Int(10, 20)},
+            {"regressor__max_depth": sw.Int(2, 4)},
+        ],
+        n_trials_per_step=2,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert "regressor__n_estimators" in optimizer.best_params_
+    assert "regressor__max_depth" in optimizer.best_params_
+    assert optimizer.predict(X.iloc[:3]).shape == (3,)
+
+
+def test_sample_weight_is_forwarded_to_cv_and_final_fit(
+    weighted_linear_regression, weighted_regression_data
+):
+    X, y, sample_weight = weighted_regression_data
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=weighted_linear_regression,
+        param_distributions=[{"fit_intercept": sw.Categorical([True, False])}],
+        n_trials_per_step=2,
+        cv=2,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y, sample_weight=sample_weight)
+
+    assert weighted_linear_regression.fit_call_sample_weights == []
+    assert len(optimizer.best_estimator_.fit_call_sample_weights) == 1
+    np.testing.assert_allclose(
+        optimizer.best_estimator_.fit_call_sample_weights[0],
+        sample_weight,
+    )
+
+
+def test_xgboost_integration_fit_and_predict(readme_regression_frame):
+    X, y = readme_regression_frame
+    estimator = XGBRegressor(
+        n_estimators=10,
+        max_depth=3,
+        learning_rate=0.1,
+        subsample=1.0,
+        colsample_bytree=1.0,
+        random_state=0,
+        verbosity=0,
+    )
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=estimator,
+        param_distributions=[
+            {"n_estimators": sw.Int(10, 20)},
+            {"max_depth": sw.Int(2, 4)},
+        ],
+        n_trials_per_step=2,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert optimizer.predict(X.iloc[:4]).shape == (4,)
+
+
+def test_catboost_integration_fit_and_predict(readme_regression_frame):
+    X, y = readme_regression_frame
+    estimator = CatBoostRegressor(
+        iterations=20,
+        depth=4,
+        learning_rate=0.1,
+        random_seed=0,
+        verbose=False,
+    )
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=estimator,
+        param_distributions=[
+            {"depth": sw.Int(3, 5)},
+            {"learning_rate": sw.Float(0.05, 0.2)},
+        ],
+        n_trials_per_step=2,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert optimizer.predict(X.iloc[:4]).shape == (4,)
+
+
+def test_fit_uses_cloned_estimators_and_does_not_fit_original_estimator(
+    readme_regression_frame,
+):
+    X, y = readme_regression_frame
+    estimator = RandomForestRegressor(random_state=0)
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=estimator,
+        param_distributions=[{"n_estimators": sw.Int(10, 20)}],
+        n_trials_per_step=2,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert not hasattr(estimator, "estimators_")
+    assert optimizer.best_estimator_ is not estimator
+
+
+def test_classifier_supports_string_scoring_and_prediction_methods():
+    X, y = make_regression(n_samples=60, n_features=4, random_state=0)
     y = (y > np.median(y)).astype(int)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
+    estimator = LogisticRegression(max_iter=200)
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=estimator,
+        param_distributions=[{"C": sw.Float(0.1, 1.0)}],
+        n_trials_per_step=2,
+        cv=3,
+        scoring="accuracy",
+        random_state=0,
+    )
 
-    model = SVC(random_state=42, probability=True) # probability=True for cross_val_score with default scoring
+    optimizer.fit(X, y)
 
-    # Define a parameter space with conditional parameters for SVC
-    # This uses the hyperopt nested dictionary structure
-    param_space_sequence = [
-        hp.choice(
-            "classifier_params", # This is the key that will hold the chosen dictionary
-            [
-                {
-                    "kernel": "linear",
-                    "C": hp.loguniform("linear_C", np.log(0.1), np.log(10)),
-                },
-                {
-                    "kernel": "rbf",
-                    "C": hp.loguniform("rbf_C", np.log(0.1), np.log(10)),
-                    "gamma": hp.loguniform("rbf_gamma", np.log(0.01), np.log(10)),
-                },
-                {
-                    "kernel": "poly",
-                    "C": hp.loguniform("poly_C", np.log(0.1), np.log(10)),
-                    "degree": hp.quniform("poly_degree", 2, 5, 1),
-                    "gamma": hp.loguniform("poly_gamma", np.log(0.01), np.log(10)),
-                    "coef0": hp.uniform("poly_coef0", 0, 1),
-                },
-            ],
+    assert optimizer.predict(X[:5]).shape == (5,)
+
+
+def test_regression_supports_callable_scoring():
+    X, y = make_regression(n_samples=50, n_features=4, random_state=0)
+    scoring = make_scorer(mean_absolute_error, greater_is_better=False)
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LinearRegression(),
+        param_distributions=[{"fit_intercept": sw.Categorical([True, False])}],
+        n_trials_per_step=2,
+        cv=3,
+        scoring=scoring,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert isinstance(optimizer.best_score_, float)
+
+
+def test_classifier_aware_cv_selection_uses_stratified_folds(monkeypatch):
+    X, y = make_regression(n_samples=40, n_features=4, random_state=0)
+    y = (y > np.median(y)).astype(int)
+    recorded = {}
+    original_check_cv = sw_search.check_cv
+
+    def recording_check_cv(cv, y=None, classifier=False):
+        recorded["classifier"] = classifier
+        return original_check_cv(cv=cv, y=y, classifier=classifier)
+
+    monkeypatch.setattr(sw_search, "check_cv", recording_check_cv)
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LogisticRegression(max_iter=200),
+        param_distributions=[{"C": sw.Float(0.1, 1.0)}],
+        n_trials_per_step=1,
+        cv=3,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert recorded["classifier"] is True
+
+
+def test_cv_accepts_splitter_object(readme_regression_frame):
+    X, y = readme_regression_frame
+    cv = KFold(n_splits=3, shuffle=True, random_state=0)
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LinearRegression(),
+        param_distributions=[{"fit_intercept": sw.Categorical([True, False])}],
+        n_trials_per_step=2,
+        cv=cv,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert isinstance(optimizer.best_score_, float)
+
+
+def test_cv_accepts_iterable_of_splits(readme_regression_frame):
+    X, y = readme_regression_frame
+    splitter = KFold(n_splits=3, shuffle=True, random_state=0)
+    splits = list(splitter.split(X, y))
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LinearRegression(),
+        param_distributions=[{"fit_intercept": sw.Categorical([True, False])}],
+        n_trials_per_step=2,
+        cv=splits,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert isinstance(optimizer.best_score_, float)
+
+
+def test_predict_proba_delegates_to_best_estimator():
+    X, y = make_regression(n_samples=60, n_features=4, random_state=0)
+    y = (y > np.median(y)).astype(int)
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LogisticRegression(max_iter=200),
+        param_distributions=[{"C": sw.Float(0.1, 1.0)}],
+        n_trials_per_step=2,
+        scoring="accuracy",
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    probabilities = optimizer.predict_proba(X[:5])
+
+    assert probabilities.shape == (5, 2)
+
+
+def test_predict_proba_before_fit_raises_not_fitted_error():
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LogisticRegression(max_iter=200),
+        param_distributions=[{"C": sw.Float(0.1, 1.0)}],
+        n_trials_per_step=1,
+    )
+    X = np.zeros((4, 2))
+
+    with pytest.raises(NotFittedError):
+        optimizer.predict_proba(X)
+
+
+def test_fit_uses_sklearn_cross_val_score(monkeypatch, readme_regression_frame):
+    X, y = readme_regression_frame
+    calls = []
+    original_cross_val_score = sw_search.cross_val_score
+
+    def recording_cross_val_score(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original_cross_val_score(*args, **kwargs)
+
+    monkeypatch.setattr(sw_search, "cross_val_score", recording_cross_val_score)
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LinearRegression(),
+        param_distributions=[{"fit_intercept": sw.Categorical([True, False])}],
+        n_trials_per_step=2,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+
+    assert calls
+
+
+def test_fit_and_predict_accept_plain_python_lists():
+    X = [[0.0], [1.0], [2.0], [3.0], [4.0], [5.0]]
+    y = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=LinearRegression(),
+        param_distributions=[{"fit_intercept": sw.Categorical([True, False])}],
+        n_trials_per_step=2,
+        cv=2,
+        random_state=0,
+    )
+
+    optimizer.fit(X, y)
+    predictions = optimizer.predict([[1.5], [2.5]])
+
+    assert predictions.shape == (2,)
+
+
+def test_deprecated_hyperopt_class_warns_and_maps_legacy_arguments(
+    readme_regression_frame,
+):
+    X, y = readme_regression_frame
+
+    with pytest.deprecated_call():
+        optimizer = sw.StepwiseHyperoptOptimizer(
+            model=RandomForestRegressor(random_state=0),
+            param_space_sequence=[{"n_estimators": sw.Int(10, 20)}],
+            max_evals_per_step=2,
+            random_state=0,
         )
-    ]
 
-    # Specify 'degree' as an integer parameter.
-    # Note: The key in best_params_ will be 'degree' directly, not 'poly_degree'.
-    # This is because hyperopt flattens the dictionary.
-    int_params_to_clean = ["degree"]
+    optimizer.fit(X, y)
 
-    optimizer = sw.StepwiseOptimizer(
-        model=model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=10, # More evals to explore kernel choices
-        random_state=42,
-        int_params=int_params_to_clean,
-        scoring="accuracy", # Set scoring for classification
-        minimize_metric=False # Accuracy is maximized
+    assert isinstance(optimizer, sw.StepwiseOptunaSearchCV)
+    assert optimizer.best_params_["n_estimators"] in range(10, 21)
+
+
+def test_deprecated_hyperopt_class_rejects_old_hyperopt_spaces():
+    class LegacySpace:
+        pass
+
+    with pytest.deprecated_call():
+        optimizer = sw.StepwiseHyperoptOptimizer(
+            model=LinearRegression(),
+            param_space_sequence=[{"fit_intercept": LegacySpace()}],
+            max_evals_per_step=1,
+        )
+
+    with pytest.raises(TypeError, match="Unsupported search dimension"):
+        optimizer.fit([[0.0], [1.0]], [0.0, 1.0])
+
+
+def test_verbose_logging_reports_progress(capsys, readme_regression_frame):
+    X, y = readme_regression_frame
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=RandomForestRegressor(random_state=0),
+        param_distributions=[
+            {"n_estimators": sw.Int(10, 20)},
+            {"max_depth": sw.Int(2, 4)},
+        ],
+        n_trials_per_step=2,
+        random_state=0,
+        verbose=1,
+    )
+
+    optimizer.fit(X, y)
+    output = capsys.readouterr().out
+
+    assert "Optimizing step 1/2" in output
+    assert "Best parameters after step 1:" in output
+    assert "Best score after step 1:" in output
+    assert "Improvement:" in output
+
+
+def test_numeric_categorical_warns():
+    with pytest.warns(UserWarning, match="Prefer Int or Float"):
+        sw.Categorical([1, 2, 3])
+
+
+def test_boolean_categorical_does_not_warn():
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        sw.Categorical([True, False])
+    assert len(record) == 0
+
+
+def test_refit_false_skips_best_estimator_fit(readme_regression_frame):
+    X, y = readme_regression_frame
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=RandomForestRegressor(random_state=0),
+        param_distributions=[{"n_estimators": sw.Int(10, 20)}],
+        n_trials_per_step=2,
+        random_state=0,
+        refit=False,
     )
 
     optimizer.fit(X, y)
 
-    assert optimizer.best_params_ is not None
-    assert "kernel" in optimizer.best_params_
-    assert "C" in optimizer.best_params_ # C will always be present
-
-    # Check that if 'poly' kernel is chosen, 'degree' is an integer
-    if optimizer.best_params_["kernel"] == "poly":
-        assert "degree" in optimizer.best_params_
-        assert isinstance(optimizer.best_params_["degree"], int)
-        # Also check that gamma and coef0 are present for poly
-        assert "gamma" in optimizer.best_params_
-        assert "coef0" in optimizer.best_params_
-    elif optimizer.best_params_["kernel"] == "rbf":
-        assert "gamma" in optimizer.best_params_
-        # Ensure poly-specific params are NOT present
-        assert "degree" not in optimizer.best_params_
-        assert "coef0" not in optimizer.best_params_
-    elif optimizer.best_params_["kernel"] == "linear":
-        # Ensure RBF/Poly specific params are NOT present
-        assert "gamma" not in optimizer.best_params_
-        assert "degree" not in optimizer.best_params_
-        assert "coef0" not in optimizer.best_params_
-    
-    assert optimizer.best_score_ is not None
-    assert optimizer.best_score_ > 0 # Score should be positive for accuracy
+    assert not hasattr(optimizer, "best_estimator_")
+    with pytest.raises(NotFittedError):
+        optimizer.predict(X)
 
 
-def test_maximization_metric_accuracy():
-    # 2.1. Add a new test for a classification model with "accuracy" scoring
-    X, y = make_classification(n_samples=100, n_features=5, n_informative=3, n_classes=2, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
-
-    model = LogisticRegression(random_state=42, solver='liblinear')
-    param_space_sequence = [
-        {"C": hp.loguniform("C", np.log(0.01), np.log(100))}
-    ]
-
-    optimizer = sw.StepwiseOptimizer(
-        model=model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=5,
-        random_state=42,
-        scoring="accuracy",
-        minimize_metric=False # Accuracy is maximized
+def test_refit_true_produces_best_estimator(readme_regression_frame):
+    X, y = readme_regression_frame
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=RandomForestRegressor(random_state=0),
+        param_distributions=[{"n_estimators": sw.Int(10, 20)}],
+        n_trials_per_step=2,
+        random_state=0,
+        refit=True,
     )
 
     optimizer.fit(X, y)
 
-    # 2.1.5. Assert that optimizer.best_score_ is positive and represents a reasonable accuracy score
-    assert optimizer.best_score_ is not None
-    assert optimizer.best_score_ > 0.5 # Accuracy should be better than random for a simple model
-    assert optimizer.best_score_ <= 1.0 # Accuracy cannot exceed 1.0
+    assert isinstance(optimizer.best_estimator_, RandomForestRegressor)
 
 
-def test_maximization_metric_roc_auc():
-    # 2.2. Add a new test for a classification model with "roc_auc" scoring
-    X, y = make_classification(n_samples=100, n_features=5, n_informative=3, n_classes=2, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
+def test_parameter_types_come_from_dimensions_not_parameter_names(
+    arbitrary_param_regressor,
+):
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=arbitrary_param_regressor,
+        param_distributions=[
+            {"tree_count": sw.Int(1, 3)},
+            {"shrinkage": sw.Float(0.1, 0.3)},
+        ],
+        n_trials_per_step=1,
+    )
+    X = np.arange(20, dtype=float).reshape(10, 2)
+    y = np.arange(10, dtype=float)
 
-    model = LogisticRegression(random_state=42, solver='liblinear')
-    param_space_sequence = [
-        {"C": hp.loguniform("C", np.log(0.01), np.log(100))}
-    ]
+    optimizer.fit(X, y)
 
-    optimizer = sw.StepwiseOptimizer(
-        model=model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=5,
-        random_state=42,
-        scoring="roc_auc", # For binary classification, roc_auc is a valid scoring
-        minimize_metric=False # ROC AUC is maximized
+    assert isinstance(optimizer.best_params_["tree_count"], int)
+    assert isinstance(optimizer.best_params_["shrinkage"], float)
+
+
+def test_verbose_zero_emits_no_progress_output(capsys, readme_regression_frame):
+    X, y = readme_regression_frame
+    optimizer = sw.StepwiseOptunaSearchCV(
+        estimator=RandomForestRegressor(random_state=0),
+        param_distributions=[{"n_estimators": sw.Int(10, 20)}],
+        n_trials_per_step=1,
+        random_state=0,
+        verbose=0,
     )
 
     optimizer.fit(X, y)
 
-    # 2.2.4. Assert that optimizer.best_score_ is between 0 and 1, and ideally > 0.5.
-    assert optimizer.best_score_ is not None
-    assert 0.0 <= optimizer.best_score_ <= 1.0
-    assert optimizer.best_score_ > 0.5 # ROC AUC should be better than random
+    assert capsys.readouterr().out == ""
 
 
-def test_maximization_metric_r2():
-    # 2.3. Add a new test for a regression model with "r2" scoring
-    X, y = make_regression(n_samples=100, n_features=5, n_informative=3, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
-
-    model = LinearRegression()
-    param_space_sequence = [
-        {"fit_intercept": hp.choice("fit_intercept", [True, False])}
-    ]
-
-    optimizer = sw.StepwiseOptimizer(
-        model=model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=5,
-        random_state=42,
-        scoring="r2",
-        minimize_metric=False # R2 is maximized
-    )
-
-    optimizer.fit(X, y)
-
-    # 2.3.4. Assert that optimizer.best_score_ is a reasonable R2 score (e.g., positive, ideally close to 1).
-    assert optimizer.best_score_ is not None
-    # R2 can be negative if the model is worse than a constant model, but for a simple linear regression
-    # on a generated dataset, it should be positive.
-    assert optimizer.best_score_ > -1.0 # R2 can be negative, but usually not extremely so for a decent model
-    assert optimizer.best_score_ <= 1.0 # R2 cannot exceed 1.0
-    # For a well-behaved dataset and model, expect a positive R2
-    assert optimizer.best_score_ > 0.0
+def test_stepwise_optuna_search_cv_uses_estimator_not_model_keyword():
+    with pytest.raises(TypeError):
+        sw.StepwiseOptunaSearchCV(
+            model=LinearRegression(),
+            param_distributions=[],
+            n_trials_per_step=1,
+        )
 
 
-def test_minimization_metric_neg_mean_squared_error():
-    # 3.1. Verify existing "neg_mean_squared_error" behavior
-    X, y = make_regression(n_samples=100, n_features=5, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
+def test_deprecated_hyperopt_class_still_accepts_model_keyword():
+    with pytest.deprecated_call():
+        optimizer = sw.StepwiseHyperoptOptimizer(
+            model=LinearRegression(),
+            param_space_sequence=[],
+            max_evals_per_step=1,
+        )
 
-    model = LinearRegression()
-    param_space_sequence = [
-        {"fit_intercept": hp.choice("fit_intercept", [True, False])}
-    ]
-
-    optimizer = sw.StepwiseOptimizer(
-        model=model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=5,
-        random_state=42,
-        scoring="neg_mean_squared_error", # This is the default, but explicitly set for clarity
-        minimize_metric=True # Negated MSE is minimized
-    )
-
-    optimizer.fit(X, y)
-
-    # 3.1.2. Confirm that optimizer.best_score_ is negative, as expected for a negated error metric.
-    assert optimizer.best_score_ is not None
-    assert optimizer.best_score_ < 0 # Negated MSE should be negative
-    # The closer to 0, the better the score (less negative)
-
-
-def test_minimization_metric_mean_squared_error():
-    # 3.2. Add a new test for "mean_squared_error" (or similar direct error metric)
-    X, y = make_regression(n_samples=100, n_features=5, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
-
-    model = LinearRegression()
-    param_space_sequence = [
-        {"fit_intercept": hp.choice("fit_intercept", [True, False])}
-    ]
-
-    # Use make_scorer to create a scorer that returns positive MSE, which we want to minimize
-    mse_scorer = make_scorer(mean_squared_error, greater_is_better=False)
-
-    optimizer = sw.StepwiseOptimizer(
-        model=model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=5,
-        random_state=42,
-        scoring=mse_scorer, # Pass the custom scorer
-        minimize_metric=True # We want to minimize this metric
-    )
-
-    optimizer.fit(X, y)
-
-    # Assert that optimizer.best_score_ is positive, as expected for a direct error metric
-    assert optimizer.best_score_ is not None
-    # Use pytest.approx for floating point comparisons
-    # The error was that for a perfect fit, MSE can be extremely close to zero,
-    # but due to floating point precision, it might be a tiny negative number.
-    # We should assert it's approximately non-negative.
-    #assert optimizer.best_score_ >= pytest.approx(0.0, abs=1e-9)
-    # For a well-behaved model, MSE should be relatively small
-    assert optimizer.best_score_ < 1000 # Arbitrary upper bound to catch extremely bad models
-
-
-def test_preserve_initial_model_params():
-    # Adjusted make_classification to avoid ValueError
-    X, y = make_classification(n_samples=50, n_features=2, n_informative=2, n_redundant=0, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
-
-    # Define a model with specific initial parameters
-    initial_solver = 'liblinear'
-    initial_random_state = 123
-    model = LogisticRegression(solver=initial_solver, random_state=initial_random_state, C=1.0)
-
-    # Define a param space that does NOT include 'solver' or 'random_state'
-    param_space_sequence = [
-        {"C": hp.loguniform("C", np.log(0.01), np.log(10))}
-    ]
-
-    optimizer = sw.StepwiseOptimizer(
-        model=model,
-        param_space_sequence=param_space_sequence,
-        max_evals_per_step=5,
-        random_state=42,
-        scoring="accuracy",
-        minimize_metric=False
-    )
-
-    optimizer.fit(X, y)
-
-    # Assert that the final fitted model retains the initial parameters
-    # The optimizer itself does not fit the final model, but it should store the initial params
-    # and the best_params_ found. The user is responsible for fitting the model with these params.
-    assert optimizer._initial_model_params['solver'] == initial_solver
-    assert optimizer._initial_model_params['random_state'] == initial_random_state
-    assert optimizer._initial_model_params['C'] == 1.0 # C should be the initial C, not the optimized one here
-
-    # Also check that the C parameter was optimized and is present in best_params_
-    assert 'C' in optimizer.best_params_
+    assert isinstance(optimizer, sw.StepwiseOptunaSearchCV)

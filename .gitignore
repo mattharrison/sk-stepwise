@@ -1,9 +1,12 @@
 # Byte-compiled files
 *.pyc
 __pycache__/
+*.egg-info/
 
 # Virtual environment directory
 venv/
+.venv/
+.tmp-venv/
 
 # Logs
 *.log
@@ -15,10 +18,14 @@ uv.lock
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
+.pytest_cache/
+.ruff_cache/
+.uv-cache/
+dist/
+
 .pyre/
 .aider*
 
 catboost_info/
 
 context/
-
