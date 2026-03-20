@@ -5,11 +5,12 @@ description = "Stepwise hyperparameter search for scikit-learn estimators"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "numpy>=2.2",
-    "optuna>=4.0",
-    "pandas>=2.2",
-    "scikit-learn>=1.5",
+   "numpy>=2.4.3",
+    "optuna>=4.8.0",
+    "pandas>=3.0.1",
+    "scikit-learn>=1.8.0",
 ]
+
 
 [dependency-groups]
 dev = [
